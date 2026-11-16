@@ -1,0 +1,1062 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Aegis AI Gateway",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/chat/completions": {
+      "post": {
+        "summary": "Completions",
+        "operationId": "completions_v1_chat_completions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletion"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "summary": "Models",
+        "operationId": "models_v1_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/usage": {
+      "get": {
+        "summary": "Usage",
+        "operationId": "usage_v1_usage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsagePage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/admin/routing-policies": {
+      "get": {
+        "summary": "Get Policies",
+        "operationId": "get_policies_v1_admin_routing_policies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Change Policy",
+        "operationId": "change_policy_v1_admin_routing_policies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ActivePolicyChange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DisabledPolicyChange"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "summary": "Ready",
+        "operationId": "ready_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "summary": "Metrics",
+        "operationId": "metrics_v1_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AssistantMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "const": "assistant",
+            "title": "Role"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "AssistantMessage"
+      },
+      "ChatChoice": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "const": 0,
+            "title": "Index"
+          },
+          "message": {
+            "$ref": "#/components/schemas/AssistantMessage"
+          },
+          "finish_reason": {
+            "type": "string",
+            "enum": [
+              "stop",
+              "length",
+              "content_filter"
+            ],
+            "title": "Finish Reason"
+          },
+          "logprobs": {
+            "type": "null",
+            "title": "Logprobs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "index",
+          "message",
+          "finish_reason"
+        ],
+        "title": "ChatChoice"
+      },
+      "ChatCompletion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "object": {
+            "type": "string",
+            "const": "chat.completion",
+            "title": "Object"
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChatChoice"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices",
+          "usage"
+        ],
+        "title": "ChatCompletion"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "title": "Health"
+      },
+      "ModelEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "object": {
+            "type": "string",
+            "const": "model",
+            "title": "Object",
+            "default": "model"
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "owned_by": {
+            "type": "string",
+            "const": "aegis",
+            "title": "Owned By",
+            "default": "aegis"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "created"
+        ],
+        "title": "ModelEntry"
+      },
+      "ModelList": {
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "list",
+            "title": "Object",
+            "default": "list"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ModelEntry"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ModelList"
+      },
+      "PublicUsage": {
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ],
+        "title": "PublicUsage"
+      },
+      "UsagePage": {
+        "properties": {
+          "object": {
+            "type": "string",
+            "title": "Object",
+            "default": "list"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/UsageRow"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          },
+          "complete_through": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Through"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "USD"
+          },
+          "range": {
+            "additionalProperties": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "object",
+            "title": "Range",
+            "description": "UTC day range with exclusive to date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "has_more",
+          "next_cursor",
+          "data",
+          "as_of",
+          "complete_through",
+          "range"
+        ],
+        "title": "UsagePage"
+      },
+      "UsageRow": {
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "requests": {
+            "type": "string",
+            "title": "Requests"
+          },
+          "attempts": {
+            "type": "string",
+            "title": "Attempts"
+          },
+          "reported_attempts": {
+            "type": "string",
+            "title": "Reported Attempts"
+          },
+          "estimated_attempts": {
+            "type": "string",
+            "title": "Estimated Attempts"
+          },
+          "adjusted_attempts": {
+            "type": "string",
+            "title": "Adjusted Attempts"
+          },
+          "confirmed_nonbillable_attempts": {
+            "type": "string",
+            "title": "Confirmed Nonbillable Attempts"
+          },
+          "pending_attempts": {
+            "type": "string",
+            "title": "Pending Attempts"
+          },
+          "prompt_tokens_observed": {
+            "type": "string",
+            "title": "Prompt Tokens Observed"
+          },
+          "completion_tokens_observed": {
+            "type": "string",
+            "title": "Completion Tokens Observed"
+          },
+          "unknown_token_attempts": {
+            "type": "string",
+            "title": "Unknown Token Attempts"
+          },
+          "reported_microusd": {
+            "type": "string",
+            "title": "Reported Microusd"
+          },
+          "estimated_microusd": {
+            "type": "string",
+            "title": "Estimated Microusd"
+          },
+          "adjusted_microusd": {
+            "type": "string",
+            "title": "Adjusted Microusd"
+          },
+          "pending_hold_microusd": {
+            "type": "string",
+            "title": "Pending Hold Microusd"
+          },
+          "total_finalized_microusd": {
+            "type": "string",
+            "title": "Total Finalized Microusd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "model",
+          "requests",
+          "attempts",
+          "reported_attempts",
+          "estimated_attempts",
+          "adjusted_attempts",
+          "confirmed_nonbillable_attempts",
+          "pending_attempts",
+          "prompt_tokens_observed",
+          "completion_tokens_observed",
+          "unknown_token_attempts",
+          "reported_microusd",
+          "estimated_microusd",
+          "adjusted_microusd",
+          "pending_hold_microusd",
+          "total_finalized_microusd"
+        ],
+        "title": "UsageRow"
+      },
+      "GatewayOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "latency_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "standard",
+                  "interactive",
+                  "batch"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Latency Class"
+          }
+        },
+        "title": "GatewayOptions",
+        "type": "object"
+      },
+      "Message": {
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "content": {
+            "maxLength": 65536,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "Message",
+        "type": "object"
+      },
+      "StreamOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "include_usage": {
+            "default": false,
+            "title": "Include Usage",
+            "type": "boolean"
+          }
+        },
+        "title": "StreamOptions",
+        "type": "object"
+      },
+      "Chat": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9:_./-]*$",
+            "title": "Model",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          },
+          "stream": {
+            "default": false,
+            "title": "Stream",
+            "type": "boolean"
+          },
+          "max_completion_tokens": {
+            "anyOf": [
+              {
+                "maximum": 2048,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Completion Tokens"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "maximum": 2048,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Tokens"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "maximum": 2,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 1,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Top P"
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stop"
+          },
+          "n": {
+            "default": 1,
+            "maximum": 1,
+            "minimum": 1,
+            "title": "N",
+            "type": "integer"
+          },
+          "stream_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StreamOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "aegis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GatewayOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "model",
+          "messages"
+        ],
+        "title": "Chat",
+        "type": "object"
+      },
+      "Edge": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "format": "uuid",
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "format": "uuid",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "target"
+        ],
+        "title": "Edge",
+        "type": "object"
+      },
+      "Target": {
+        "additionalProperties": false,
+        "properties": {
+          "deployment_id": {
+            "format": "uuid",
+            "title": "Deployment Id",
+            "type": "string"
+          },
+          "priority": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "weight": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deployment_id",
+          "priority",
+          "weight"
+        ],
+        "title": "Target",
+        "type": "object"
+      },
+      "Weights": {
+        "additionalProperties": false,
+        "properties": {
+          "cost": {
+            "default": 35,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Cost",
+            "type": "integer"
+          },
+          "latency": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Latency",
+            "type": "integer"
+          },
+          "reliability": {
+            "default": 25,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Reliability",
+            "type": "integer"
+          },
+          "priority": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "title": "Weights",
+        "type": "object"
+      },
+      "ActivePolicyChange": {
+        "additionalProperties": false,
+        "properties": {
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/Target"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Targets",
+            "type": "array"
+          },
+          "fallback_edges": {
+            "items": {
+              "$ref": "#/components/schemas/Edge"
+            },
+            "maxItems": 56,
+            "title": "Fallback Edges",
+            "type": "array"
+          },
+          "weights": {
+            "$ref": "#/components/schemas/Weights"
+          },
+          "weighted_band": {
+            "default": 0,
+            "maximum": 50000,
+            "minimum": 0,
+            "title": "Weighted Band",
+            "type": "integer"
+          },
+          "enable_weighted": {
+            "default": false,
+            "title": "Enable Weighted",
+            "type": "boolean"
+          },
+          "cost_reference_microusd": {
+            "default": "20000",
+            "pattern": "^[1-9][0-9]{0,14}$",
+            "title": "Cost Reference Microusd",
+            "type": "string"
+          },
+          "max_request_cost_microusd": {
+            "anyOf": [
+              {
+                "pattern": "^[1-9][0-9]{0,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Request Cost Microusd"
+          },
+          "allow_ambiguous_failover": {
+            "default": false,
+            "title": "Allow Ambiguous Failover",
+            "type": "boolean"
+          },
+          "data_regions": {
+            "items": {
+              "pattern": "^[a-z0-9-]{1,32}$",
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Data Regions",
+            "type": "array"
+          },
+          "default_latency_class": {
+            "default": "standard",
+            "enum": [
+              "standard",
+              "interactive",
+              "batch"
+            ],
+            "title": "Default Latency Class",
+            "type": "string"
+          },
+          "allowed_latency_classes": {
+            "items": {
+              "enum": [
+                "standard",
+                "interactive",
+                "batch"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Allowed Latency Classes",
+            "type": "array"
+          },
+          "enforce_predicted_ceiling": {
+            "default": false,
+            "title": "Enforce Predicted Ceiling",
+            "type": "boolean"
+          },
+          "model": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9:_./-]*$",
+            "title": "Model",
+            "type": "string"
+          },
+          "expected_revision": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "catalog_revision": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Catalog Revision",
+            "type": "integer"
+          },
+          "status": {
+            "const": "active",
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          },
+          "change_reason": {
+            "title": "Change Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "targets",
+          "data_regions",
+          "model",
+          "expected_revision",
+          "catalog_revision",
+          "change_reason"
+        ],
+        "title": "ActivePolicyChange",
+        "type": "object"
+      },
+      "DisabledPolicyChange": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9:_./-]*$",
+            "title": "Model",
+            "type": "string"
+          },
+          "expected_revision": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "catalog_revision": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Catalog Revision",
+            "type": "integer"
+          },
+          "status": {
+            "const": "disabled",
+            "title": "Status",
+            "type": "string"
+          },
+          "change_reason": {
+            "title": "Change Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "expected_revision",
+          "catalog_revision",
+          "status",
+          "change_reason"
+        ],
+        "title": "DisabledPolicyChange",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

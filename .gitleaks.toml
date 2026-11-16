@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "aegis-api-key"
+description = "Aegis service API key"
+regex = '''(?:^|[^A-Za-z0-9_-])(ag_(?:live|test)_[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43})(?:[^A-Za-z0-9_-]|$)'''
+secretGroup = 1
+keywords = ["ag_live_", "ag_test_"]

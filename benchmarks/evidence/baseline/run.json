@@ -1,0 +1,42 @@
+{
+  "recorded_at": "2026-11-16T17:02:32.772651+00:00",
+  "duration_seconds": 20,
+  "python": "3.12.14",
+  "kernel": "6.18.57",
+  "arch": "x86_64",
+  "logical_cpus": 9,
+  "tenants": 251,
+  "replicas": 2,
+  "profiles": [
+    {
+      "users": 4,
+      "exit_code": 0,
+      "elapsed_seconds": 20.32318390499995,
+      "metrics": {
+        "sse:aegis_gateway_admission_seconds_count": 323.0,
+        "sse:aegis_gateway_admission_seconds_sum": 13.233309923999286,
+        "json:aegis_gateway_admission_seconds_count": 1129.0,
+        "json:aegis_gateway_admission_seconds_sum": 40.753690631997415,
+        "sse:aegis_routing_evaluation_seconds_count": 323.0,
+        "sse:aegis_routing_evaluation_seconds_sum": 0.01753321800060803,
+        "json:aegis_routing_evaluation_seconds_count": 1129.0,
+        "json:aegis_routing_evaluation_seconds_sum": 0.05798030699475021
+      }
+    },
+    {
+      "users": 16,
+      "exit_code": 0,
+      "elapsed_seconds": 20.39528400900008,
+      "metrics": {
+        "sse:aegis_gateway_admission_seconds_count": 310.0,
+        "sse:aegis_gateway_admission_seconds_sum": 49.11782274600159,
+        "json:aegis_gateway_admission_seconds_count": 1087.0,
+        "json:aegis_gateway_admission_seconds_sum": 173.55896156999665,
+        "sse:aegis_routing_evaluation_seconds_count": 310.0,
+        "sse:aegis_routing_evaluation_seconds_sum": 0.019516650997275065,
+        "json:aegis_routing_evaluation_seconds_count": 1087.0,
+        "json:aegis_routing_evaluation_seconds_sum": 0.06592090400363304
+      }
+    }
+  ]
+}
