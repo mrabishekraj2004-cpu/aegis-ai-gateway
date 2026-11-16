@@ -87,7 +87,7 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-Local verification recorded 52 passing backend tests on both CPython 3.12 and 3.13, 12 Vitest tests, and six Playwright tests. The browser and backend tests used disposable PostgreSQL and Redis running directly. Local Docker image builds and a hosted CI run remain unverified. [Verification report](VERIFICATION.md) · [CI workflow](.github/workflows/verify.yml)
+Local verification recorded 52 passing backend tests on both CPython 3.12 and 3.13, 12 Vitest tests, and six Playwright tests. The browser and backend tests used disposable PostgreSQL and Redis running directly. The first GitHub Actions run built and started the containers and passed the backend and security jobs. [Verification report](VERIFICATION.md) · [CI workflow](.github/workflows/verify.yml) · [First hosted run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/43922504873)
 
 | Two replicas, local mock | Responses | Requests/s | p50 | p95 | p99 | Errors |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

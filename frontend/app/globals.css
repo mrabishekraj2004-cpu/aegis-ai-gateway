@@ -314,6 +314,7 @@ progress::-moz-progress-bar { background: var(--chart-main); border-radius: 5px;
 .access-controls > div { display: grid; grid-template-columns: 19px minmax(0,1fr) auto; gap: 8px; padding: 8px 0; align-items: center; border-top: 1px solid var(--line); }
 .access-controls svg { color: var(--accent); }
 .access-controls strong, .access-controls small { display: block; }
+.access-controls strong { color: var(--ink); }
 .access-controls small { color: var(--muted); font-size: 11px; }
 .selection-bar { display: flex; gap: 11px; align-items: center; flex-wrap: wrap; background: var(--surface); box-shadow: var(--shadow); padding: 7px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
 .selection-bar > svg { color: var(--accent); }
