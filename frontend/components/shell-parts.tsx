@@ -1,8 +1,7 @@
 "use client";
 
-import { ChevronDown, FlaskConical, Plug } from "lucide-react";
+import { ChevronDown, Info, Plug } from "lucide-react";
 import { useConsole } from "./session";
-import { Notice } from "./ui";
 export { Badge } from "./ui";
 
 export function DateRange() {
@@ -20,10 +19,10 @@ export function ConsoleButton({ compact = false }: { compact?: boolean }) {
   </button>;
 }
 export function SourceNotice() {
-  const { connection, openConnection } = useConsole();
+  const { connection } = useConsole();
   if (connection) return null;
-  return <Notice tone="warn" icon={FlaskConical}>
-    <strong>Demo workspace</strong><span className="source-text">Sample traffic, providers, and usage. </span>
-    <button className="inline-button" onClick={openConnection}>Connect a gateway</button><span className="source-text"> to view your data.</span>
-  </Notice>;
+  return <div className="data-source">
+    <Info size={16} aria-hidden="true" />
+    <p>You’re viewing sample data.</p>
+  </div>;
 }

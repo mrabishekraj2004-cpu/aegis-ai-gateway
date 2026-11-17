@@ -4,17 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
-  ArrowUpRight, ChevronDown, ChevronRight, CircleDot, FlaskConical, Menu, Moon, Plug, Search, ShieldCheck, Sun, Unplug,
+  ArrowUpRight, ChevronDown, ChevronRight, CircleDot, FlaskConical, Menu, Moon, Plug, Search, Sun, Unplug,
 } from "lucide-react";
 import { navigation } from "@/lib/navigation";
 import { errorText, gatewayBase, models, type Session } from "@/lib/gateway";
-import { Badge, ConsoleButton, } from "./shell-parts";
+import { Badge, ConsoleButton } from "./shell-parts";
 import { Empty, IconButton, Modal, Notice, Spinner } from "./ui";
 import { ConsoleProvider, useConsole } from "./session";
 
 function Branding() {
   return <Link href="/" className="brand" aria-label="Aegis overview">
-    <span className="brand-mark"><ShieldCheck size={21} strokeWidth={2.1} aria-hidden="true" /></span>
+    <span className="brand-mark" aria-hidden="true">A.</span>
     <span><strong>Aegis</strong><small>AI Gateway</small></span>
   </Link>;
 }
@@ -133,6 +133,7 @@ function ShellBody({ children }: { children: ReactNode }) {
       <header className="topbar">
         <div className="breadcrumbs">
           <IconButton className="mobile-menu" label="Open navigation" onClick={() => setMenu(true)}><Menu size={20} /></IconButton>
+          <Link href="/" className="mobile-brand" aria-label="Aegis overview"><span className="brand-mark" aria-hidden="true">A.</span><span>Aegis</span></Link>
           <span className="crumb-root">Console</span><ChevronRight className="crumb-root" size={14} aria-hidden="true" /><span className="crumb-current">{current.label}</span>
         </div>
         <div className="top-actions">
@@ -141,7 +142,7 @@ function ShellBody({ children }: { children: ReactNode }) {
           </button>
           <span className="top-divider" />
           <ThemeButton />
-          <span className="header-source"><Badge tone={connection ? "good" : "warn"} dot>{connection ? "Live gateway" : "Demo data"}</Badge></span>
+          <span className="header-source"><Badge tone={connection ? "good" : "neutral"} dot>{connection ? "Live gateway" : "Demo data"}</Badge></span>
         </div>
       </header>
       <main id="main" tabIndex={-1}>{children}</main>

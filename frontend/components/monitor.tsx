@@ -107,17 +107,19 @@ export function Overview() {
   const { page, error, loading, retry } = useUsage();
   const metrics = useOverviewMetrics(page?.data ?? [], !connection);
   return <>
-    <PageHead title="Overview" description="Monitor traffic, spend, and provider health across your gateway."><DateRange /><ConsoleButton /></PageHead>
+    <PageHead title="Overview" description="Request traffic, inference spend, and provider availability."><DateRange /><ConsoleButton /></PageHead>
     <SourceNotice />
-    {loading ? <Busy label="Loading overview metrics" /> : error ? <UsageError message={error} retry={retry} /> : <Metrics items={metrics} />}
-    <div className="overview-grid">
-      <Panel title="Request volume" description="Daily requests across all model aliases"
-        action={<Hint text="Counts represent admitted requests. A provider retry does not add another request." />} className="traffic-panel">
-        {page ? page.data.length ? <Chart title="Daily request volume" data={series(page, !connection)} type="requests" demo={!connection} /> :
-          <Empty title="No requests in this range" description="Run a completion or choose a longer date range." /> :
-          loading ? <Busy /> : <Empty title="Request volume unavailable" description="The usage report could not be loaded." />}
-      </Panel>
-      <ProviderAvailability />
+    <div className="overview-workbench">
+      {loading ? <Busy label="Loading overview metrics" /> : error ? <UsageError message={error} retry={retry} /> : <Metrics items={metrics} />}
+      <div className="overview-grid">
+        <Panel title="Request volume" description="Daily requests across all model aliases"
+          action={<Hint text="Counts represent admitted requests. A provider retry does not add another request." />} className="traffic-panel">
+          {page ? page.data.length ? <Chart title="Daily request volume" data={series(page, !connection)} type="requests" demo={!connection} /> :
+            <Empty title="No requests in this range" description="Run a completion or choose a longer date range." /> :
+            loading ? <Busy /> : <Empty title="Request volume unavailable" description="The usage report could not be loaded." />}
+        </Panel>
+        <ProviderAvailability />
+      </div>
     </div>
     <Panel title="Recent activity" description={connection ? "Request-level visibility" : "Latest requests across provider routes"}
       action={<TextLink href="/analytics/">View analytics</TextLink>} className="activity-panel">

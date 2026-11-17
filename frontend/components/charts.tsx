@@ -30,11 +30,7 @@ export function Chart({ title, data, type, demo = false, height = 250 }: {
     <div className="plot" style={{ height }} aria-hidden="true">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 600, height }}>
         <ComposedChart data={data} margin={{ top: 10, right: 15, bottom: 2, left: 2 }} accessibilityLayer={false}>
-          <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-main)" stopOpacity={0.18} />
-            <stop offset="100%" stopColor="var(--chart-main)" stopOpacity={0.025} />
-          </linearGradient></defs>
-          <CartesianGrid stroke="var(--grid)" strokeDasharray="4 4" vertical={false} />
+          <CartesianGrid stroke="var(--grid)" vertical={false} />
           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={19} tickMargin={10}
             tick={{ fontSize: 11, fill: "var(--muted)" }} />
           <YAxis axisLine={false} tickLine={false} width={46} tickMargin={7} tickCount={5}
@@ -47,8 +43,8 @@ export function Chart({ title, data, type, demo = false, height = 250 }: {
             itemStyle={{ color: "var(--ink)" }}
             formatter={(value, name) => [valueLabel(Number(value)), labels[String(name)] ?? String(name)]} />
           {type === "requests" && <>
-            {demo && <Line type="monotone" dataKey="previous" stroke="var(--chart-secondary)" strokeWidth={1.75} strokeDasharray="5 5" dot={false} isAnimationActive={false} />}
-            <Area type="monotone" dataKey="requests" stroke="var(--chart-main)" fill={`url(#${id})`} strokeWidth={2.3}
+            {demo && <Line type="linear" dataKey="previous" stroke="var(--chart-secondary)" strokeWidth={1.5} strokeDasharray="4 5" dot={false} isAnimationActive={false} />}
+            <Area type="linear" dataKey="requests" stroke="var(--chart-main)" fill="var(--chart-main)" fillOpacity={0.10} strokeWidth={2}
               activeDot={{ r: 4, fill: "var(--chart-main)", stroke: "var(--surface)", strokeWidth: 2 }} isAnimationActive={false} />
           </>}
           {type === "cost" && <>
