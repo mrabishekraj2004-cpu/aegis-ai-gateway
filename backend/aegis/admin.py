@@ -30,7 +30,7 @@ from aegis.contracts import (
 )
 from aegis.database import Database, lock_catalog, lock_tenant
 from aegis.errors import GatewayError
-from aegis.settings import Settings
+from aegis.settings import RuntimeSettings, Settings
 
 CAPABILITIES = frozenset({"text", "stream", "system", "stop", "temperature", "top_p"})
 ACTOR = "database-operator-cli"
@@ -367,7 +367,12 @@ async def tenant_id(conn: AsyncConnection, slug: str) -> UUID:
 
 
 async def run(args, settings: Settings) -> dict:
-    database = Database(settings, os.environ["AEGIS_ADMIN_DATABASE_URL"])
+    admin_settings = RuntimeSettings(
+        environment=settings.environment,
+        database_url=os.environ["AEGIS_ADMIN_DATABASE_URL"],
+        db_pool_size=settings.db_pool_size,
+    )
+    database = Database(admin_settings)
     try:
         if args.command == "demo":
             return await provision_demo(database, settings, args.slug)
@@ -410,8 +415,14 @@ async def run(args, settings: Settings) -> dict:
                 return {"key_id": str(args.key_id)}
             if args.command == "enroll":
                 spec = Enrollment.model_validate_json(args.spec.read_bytes())
-                if spec.provider == "mock" and settings.environment not in {"local", "test"}:
-                    raise fail("Mock enrollment is local-only.")
+                if (
+                    spec.provider == "mock"
+                    and settings.environment not in {"local", "test"}
+                    and (not args.allow_mock or spec.upstream_model != "mock-v1" or spec.credential_ref)
+                ):
+                    raise fail(
+                        "Hosted mock enrollment requires --allow-mock and the credential-free mock-v1."
+                    )
                 deployment, revision = await enroll(conn, identity, spec, reason)
                 return {"deployment_id": str(deployment), "catalog_revision": revision}
             if args.command == "policy":
@@ -510,7 +521,11 @@ def parser() -> argparse.ArgumentParser:
     issue.add_argument("--scope", choices=sorted(KEY_SCOPES), action="append", required=True)
     issue.add_argument("--days", type=int, default=30)
     command("revoke-key").add_argument("key_id", type=UUID)
-    command("enroll").add_argument("spec", type=Path)
+    enrollment = command("enroll")
+    enrollment.add_argument("spec", type=Path)
+    enrollment.add_argument(
+        "--allow-mock", action="store_true", help="Allow credential-free mock-v1 in a hosted environment."
+    )
     command("policy").add_argument("spec", type=Path)
     member = command("member")
     member.add_argument("--issuer", required=True)

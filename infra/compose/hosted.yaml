@@ -1,0 +1,62 @@
+name: aegis-hosted
+
+x-runtime: &runtime
+  image: ${AEGIS_RELEASE_IMAGE:-aegis-ai-gateway:local}
+  pull_policy: never
+  init: true
+  volumes:
+    - type: bind
+      source: ${AEGIS_CONFIG_DIR:-/etc/aegis}/ca
+      target: /run/aegis/ca
+      read_only: true
+      bind:
+        create_host_path: false
+
+services:
+  gateway:
+    <<: *runtime
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    env_file: ${AEGIS_CONFIG_DIR:-/etc/aegis}/gateway.env
+    environment:
+      AEGIS_ENVIRONMENT: production
+      AEGIS_DB_POOL_SIZE: ${AEGIS_GATEWAY_DB_POOL_SIZE:-4}
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+    stop_grace_period: 100s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/v1/health', timeout=1).close()"
+      interval: 15s
+      timeout: 3s
+      retries: 4
+      start_period: 15s
+
+  worker:
+    <<: *runtime
+    env_file: ${AEGIS_CONFIG_DIR:-/etc/aegis}/worker.env
+    environment:
+      AEGIS_ENVIRONMENT: production
+      AEGIS_DB_POOL_SIZE: ${AEGIS_WORKER_DB_POOL_SIZE:-2}
+    command: [aegis-worker]
+    restart: unless-stopped
+
+  migrate:
+    <<: *runtime
+    profiles: [ops]
+    env_file: ${AEGIS_CONFIG_DIR:-/etc/aegis}/migrate.env
+    command: [alembic, upgrade, head]
+
+  operator:
+    <<: *runtime
+    profiles: [ops]
+    env_file: ${AEGIS_CONFIG_DIR:-/etc/aegis}/operator.env
+    environment:
+      AEGIS_ENVIRONMENT: production
+    entrypoint: [aegis-admin]
+    command: [--help]
