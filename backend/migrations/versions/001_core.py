@@ -136,9 +136,10 @@ def upgrade() -> None:
         ("lookup_api_key(text)", "aegis_runtime"),
         ("recovery_candidates(integer)", "aegis_worker"),
     ):
-        op.execute(f"ALTER FUNCTION aegis.{signature} OWNER TO aegis_lookup")
+        # Set ACLs while the migrator still owns the function.
         op.execute(f"REVOKE ALL ON FUNCTION aegis.{signature} FROM PUBLIC")
         op.execute(f"GRANT EXECUTE ON FUNCTION aegis.{signature} TO {role}")
+        op.execute(f"ALTER FUNCTION aegis.{signature} OWNER TO aegis_lookup")
     op.execute("REVOKE CREATE ON SCHEMA aegis FROM aegis_lookup")
     op.execute("INSERT INTO aegis.providers(code) VALUES ('mock'), ('openai'), ('anthropic')")
     op.execute(

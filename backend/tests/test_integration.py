@@ -168,6 +168,13 @@ async def test_offline_json_stream_usage_and_health(runtime):
 
 async def test_revocation_rls_and_credential_scopes(runtime):
     rt = runtime
+    async with rt.app.state.db.transaction() as conn:
+        assert await conn.scalar(
+            sa.text("SELECT has_function_privilege('aegis.lookup_api_key(text)', 'EXECUTE')")
+        )
+        assert not await conn.scalar(
+            sa.text("SELECT has_function_privilege('aegis.recovery_candidates(integer)', 'EXECUTE')")
+        )
     one, two = await rt.seed(), await rt.seed()
     tenant = UUID(one["tenant_id"])
     response = await rt.http.post(CHAT, json=body(max_tokens=2), headers=rt.headers(one))
