@@ -4,6 +4,10 @@ A multi-tenant gateway for text inference. Aegis provides a single Chat Completi
 
 The engineering problem is coordinating requests across replicas without losing tenant isolation, duplicating a partially streamed response, or authorizing provider calls beyond an approved budget.
 
+[Open the live dashboard demo](https://aegis-ai-gateway.vercel.app/)
+
+The Vercel demo uses sample telemetry and runs playground samples in the browser. To try gateway-backed requests, follow the [local quick start](#quick-start).
+
 [Architecture](docs/architecture.md) · [API reference](docs/api.md) · [Local development](docs/local-development.md) · [Decisions](docs/adr/README.md) · [Verification](VERIFICATION.md)
 
 ## Architecture

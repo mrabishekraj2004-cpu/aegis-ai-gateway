@@ -6,6 +6,10 @@ Executed November 16, 2026 Eastern time. The available checkout contained the te
 
 The audit follows `BLUEPRINT.md` §§8–12 and §§15–22, the backend checklist, frontend README, migrations, tests, Dockerfile and Compose profiles. No Git history or existing workflow definition was present in the available checkout.
 
+## Hosted dashboard
+
+On November 17, 2026, the [public Vercel dashboard](https://aegis-ai-gateway.vercel.app/) opened without signing in, displayed labeled sample telemetry, and completed an in-browser playground sample. Cloud gateway deployment is pending. The gateway-backed checks below used local PostgreSQL and Redis.
+
 ## Verification matrix
 
 | Feature | Expected behavior | Test method | Actual result | Status | Outstanding risks |
