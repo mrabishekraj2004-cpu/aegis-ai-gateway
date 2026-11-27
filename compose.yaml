@@ -1,0 +1,155 @@
+name: aegis-gateway
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate a local .env before starting Compose}
+      POSTGRES_DB: aegis
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: "4174"
+      AEGIS_HOST: 0.0.0.0
+      AEGIS_MODE: local
+      AEGIS_STORAGE: postgres
+      AEGIS_DATABASE_HOST: postgres
+      AEGIS_DATABASE_PORT: "5432"
+      AEGIS_DATABASE_NAME: aegis
+      AEGIS_DATABASE_USER: aegis
+      AEGIS_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Generate a local .env before starting Compose}
+      AEGIS_ALLOWED_ORIGIN: http://localhost:4173
+      AEGIS_DEMO_ASTER_TOKEN: ${AEGIS_DEMO_ASTER_TOKEN:?Generate a local .env before starting Compose}
+      AEGIS_DEMO_JUNIPER_TOKEN: ${AEGIS_DEMO_JUNIPER_TOKEN:?Generate a local .env before starting Compose}
+      AEGIS_DEMO_BUDGET_TOKEN: ${AEGIS_DEMO_BUDGET_TOKEN:?Generate a local .env before starting Compose}
+      AEGIS_METRICS_TOKEN: ${AEGIS_METRICS_TOKEN:?Generate a local .env before starting Compose}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: aegis-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    command: ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed-local.mjs && node server.mjs"]
+    ports:
+      - "127.0.0.1:4174:4174"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4174/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  workers:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: production
+      AEGIS_MODE: local
+      AEGIS_STORAGE: postgres
+      AEGIS_DATABASE_HOST: postgres
+      AEGIS_DATABASE_PORT: "5432"
+      AEGIS_DATABASE_NAME: aegis
+      AEGIS_DATABASE_USER: aegis
+      AEGIS_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Generate a local .env before starting Compose}
+      AEGIS_WORKER_INTERVAL_MS: "5000"
+      AEGIS_RECONCILE_MAX_ATTEMPTS: "8"
+      AEGIS_OUTBOX_MAX_ATTEMPTS: "12"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: aegis-workers
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    command: ["node", "workers.mjs"]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      PORT: "4173"
+      AEGIS_HOST: 0.0.0.0
+      AEGIS_API_BASE_URL: http://localhost:4174
+      AEGIS_LOCAL_DEMO: "true"
+      AEGIS_DEMO_ASTER_TOKEN: ${AEGIS_DEMO_ASTER_TOKEN:?Generate a local .env before starting Compose}
+      AEGIS_DEMO_JUNIPER_TOKEN: ${AEGIS_DEMO_JUNIPER_TOKEN:?Generate a local .env before starting Compose}
+      AEGIS_DEMO_BUDGET_TOKEN: ${AEGIS_DEMO_BUDGET_TOKEN:?Generate a local .env before starting Compose}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4173:4173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.166.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    expose:
+      - "4317"
+      - "4318"
+      - "9464"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--config.expand-env", "--storage.tsdb.retention.time=15d"]
+    environment:
+      AEGIS_METRICS_TOKEN: ${AEGIS_METRICS_TOKEN:?Generate a local .env before starting Compose}
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/aegis-alerts.yml:/etc/prometheus/rules/aegis-alerts.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    expose:
+      - "9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Generate a local .env before starting Compose}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Generate a local .env before starting Compose}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/aegis-gateway-dashboard.json:/var/lib/grafana/dashboards/aegis-gateway-dashboard.json:ro
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
