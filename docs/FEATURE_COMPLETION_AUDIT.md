@@ -1,12 +1,14 @@
 # Feature completion audit
 
 **Date:** 2026-11-27  
-**Source:** Current uncommitted workspace snapshot. This directory has no Git metadata, so there is no commit SHA to identify.  
+**Source:** Current workspace snapshot, synced to GitHub `main`. The latest tested code commit is `316b8950bb3e648d175c3e329261930fc527aa26`; this workspace itself has no Git metadata.  
 **Conclusion:** The 25 requested items are **not all complete**. The gateway has substantial feature code, but database, live-provider, operational, and deployment validation is still outstanding.
 
 ## Verification run
 
-**Fresh rerun:** Both package syntax checks passed. Backend tests: **25 passed, 0 failed, 9 skipped** (34 total); frontend tests: **14 passed, 0 failed, 0 skipped**. The backend streaming test initially failed because its synthetic tenant was missing from the memory-ledger fixture; the fixture was corrected and the suite then passed. The nine skipped cases are PostgreSQL integration tests; no `AEGIS_TEST_DATABASE_URL` is configured for this run.
+**Fresh local rerun:** Both package syntax checks passed. Backend tests: **25 passed, 0 failed, 9 skipped** (34 total); frontend tests: **14 passed, 0 failed, 0 skipped**. The backend streaming test initially failed because its synthetic tenant was missing from the memory-ledger fixture; the fixture was corrected and the suite then passed. Local PostgreSQL tests skip because no `AEGIS_TEST_DATABASE_URL` is configured.
+
+**GitHub Actions verification:** On commit `316b8950bb3e648d175c3e329261930fc527aa26`, CI passed with **34 backend tests passed, 0 failed, 0 skipped**, including all nine PostgreSQL integration tests, and **14 frontend tests passed, 0 failed, 0 skipped**. The Security workflow also passed: CodeQL, dependency audit, secret scan, and built-image scans. See [CI run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46053398512) and [Security run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46053398437).
 
 | Check | Result |
 |---|---|
@@ -14,13 +16,13 @@
 | Backend `npm test` | 25 passed, 0 failed, 9 skipped (34 total; fresh rerun) |
 | Frontend `npm run check` | Passed (fresh rerun) |
 | Frontend `npm test` | 14 passed, 0 failed, 0 skipped (fresh rerun) |
-| PostgreSQL integration checks | Not run: no `AEGIS_TEST_DATABASE_URL`; all 9 PG tests skipped |
+| PostgreSQL integration checks | Local run skipped; GitHub Actions ran and passed all 9 checks with zero skips |
 | Local PostgreSQL through Docker | Blocked: Docker CLI is present, but its engine is unavailable (`open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.`) |
 | Separate-process HTTP / real browser | Not verified in this audit |
 | Live OpenAI / Anthropic calls | Not verified; no live provider credentials were supplied for this audit |
 | Deployment and demo video | Not done |
 
-The GitHub Actions workflow now defines PostgreSQL 16 and fails if a CI run is missing the test database or reports skipped tests. That workflow has not run from this workspace. The provider adapter unit tests use mocked HTTP responses; they do not prove connectivity or compatibility with live provider accounts.
+The GitHub Actions workflow starts PostgreSQL 16 and fails if tests skip; the latest run passed. The provider adapter unit tests use mocked HTTP responses; they do not prove connectivity or compatibility with live provider accounts.
 
 ## Status by requested item
 
@@ -46,8 +48,8 @@ The GitHub Actions workflow now defines PostgreSQL 16 and fails if a CI run is m
 | 18 | **Not built** | No operational database guide for pool monitoring, transaction timeouts, retention, query-plan validation, rollback procedure, or partitioning strategy is present. |
 | 19 | **Not built** | Strong-consistency boundaries, budget home region, regional failover, partition behavior, and disaster-recovery procedure are not documented or tested. |
 | 20 | **Not built as a threat model** | Some mitigations exist in code, but there is no threat-to-mitigation-to-test document covering the requested attack set. |
-| 21 | **Partial** | CI config includes secret scanning, npm audit, CodeQL, Trivy filesystem scanning, and release image SBOM/provenance/signing steps; Docker images run as non-root. Trivy is not scanning built images, action/security workflow execution is unverified, and GitHub production-environment protection must be configured in repository settings. |
-| 22 | **Configured; execution pending** | GitHub Actions starts PostgreSQL 16, requires `AEGIS_TEST_DATABASE_URL`, and checks for zero skips. Nine PostgreSQL integration scenarios now exist, including crash recovery and quota cases, but no CI run has executed them. |
+| 21 | **Partial** | Latest Security workflow passed CodeQL, npm audit, secret scanning, and Trivy scans of both built images; release image SBOM/provenance/signing runs on version tags. Docker images run as non-root. Protected production environment settings still require repository configuration and were not verified. |
+| 22 | **Executed successfully in CI** | GitHub Actions starts PostgreSQL 16, requires `AEGIS_TEST_DATABASE_URL`, and checks for zero skips. All nine PostgreSQL integration scenarios passed in the latest CI run, including migrations, independent-connection admission, duplicate settlement, tenant isolation, restart persistence, reconciliation, and quotas. |
 | 23 | **Partial** | A database-backed recovery test models a crash before provider start and after provider success; a guarded synthetic load script exists. Actual process termination at every requested point, injected database failures, delay/duplicate/network fault matrix, and load run were not performed. |
 | 24 | **Not built** | The requested ADRs and operational runbooks are absent. |
 | 25 | **Not built** | No live mock deployment or walkthrough video showing the requested scenarios exists. |
