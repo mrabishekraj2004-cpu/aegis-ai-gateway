@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { PostgresLedger } from "../src/postgres-ledger.js";
 import { ApiKeyService } from "../src/api-keys.js";
+import { databaseConfigFromEnv } from "../src/database-config.js";
 
-if (!process.env.DATABASE_URL || !process.env.AEGIS_KEY_PEPPER) throw new Error("Set DATABASE_URL and AEGIS_KEY_PEPPER before creating an administrative key.");
+const databaseConfig=databaseConfigFromEnv();
+if (!databaseConfig || !process.env.AEGIS_KEY_PEPPER) throw new Error("Set PostgreSQL settings and AEGIS_KEY_PEPPER before creating an administrative key.");
 const { Pool }=await import("pg");
-const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:3000});
+const pool=new Pool({...databaseConfig,connectionTimeoutMillis:3000});
 const store=new PostgresLedger({pool});
 try {
   const tenantId=process.env.AEGIS_ADMIN_TENANT_ID || "tenant_aegis_admin";
