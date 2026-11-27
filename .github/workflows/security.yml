@@ -50,19 +50,23 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Scan backend image filesystem
-        uses: aquasecurity/trivy-action@v0.28.0
+      - name: Build backend image
+        run: docker build --pull -t aegis-backend:ci backend
+      - name: Build frontend image
+        run: docker build --pull -t aegis-frontend:ci frontend
+      - name: Scan backend container image
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: fs
-          scan-ref: backend
+          scan-type: image
+          image-ref: aegis-backend:ci
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           exit-code: "1"
-      - name: Scan frontend image filesystem
-        uses: aquasecurity/trivy-action@v0.28.0
+      - name: Scan frontend container image
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: fs
-          scan-ref: frontend
+          scan-type: image
+          image-ref: aegis-frontend:ci
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           exit-code: "1"
