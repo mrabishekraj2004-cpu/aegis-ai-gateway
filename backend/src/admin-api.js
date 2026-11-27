@@ -1,16 +1,24 @@
-import { randomUUID } from "node:crypto";
-
+// @ts-check
+/** @param {number} status @param {any} body @param {Record<string, string>} [headers] */
 const response = (status, body, headers = {}) => ({ status, headers: { "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store", ...headers }, body });
+/** @param {import("./contracts.js").TenantPrincipal} principal @param {string} name */
 const scope = (principal, name) => principal?.scopes?.includes("admin") || principal?.scopes?.includes(name);
+/** @param {import("./contracts.js").TenantPrincipal} principal */
 const adminRole = principal => ["owner","admin"].includes(principal?.role);
+/** @param {import("./contracts.js").TenantPrincipal} principal */
+const platformAdmin = principal => principal?.platformAdmin === true;
+const platformRoutes = new Set(["/v1/admin/tenants", "/v1/admin/pricing", "/v1/admin/provider-health"]);
 
+/** @param {any} body */
 function requireReason(body) { return typeof body?.reason === "string" && body.reason.trim().length >= 3; }
 
-export async function handleAdminRequest({ method, path, url, body, principal, store, keyService, providers = new Map(), providerHealth = () => [] }) {
+/** @param {import("./contracts.js").AdminRequest} options */
+export async function handleAdminRequest({ method, path, url, body, principal, store, keyService, providers = new Map(), providerHealth = () => /** @type {Array<{name:string}>} */([]) }) {
   const readAllowed = adminRole(principal) && (scope(principal,"control:read") || scope(principal,"control:write"));
   const writeAllowed = adminRole(principal) && scope(principal,"control:write");
   if (!readAllowed) return response(403,{error:{code:"insufficient_scope",message:"An owner or administrator credential with control-plane access is required."}});
   const verb=method.toUpperCase();
+  if (platformRoutes.has(path) && !platformAdmin(principal)) return response(403,{error:{code:"platform_admin_required",message:"This control-plane resource is restricted to platform administrators."}});
   if (verb==="GET" && path==="/v1/admin/tenants") return response(200,{tenants:await store.listTenants()});
   if (verb==="POST" && path==="/v1/admin/tenants") {
     if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});
@@ -90,6 +98,7 @@ export async function handleAdminRequest({ method, path, url, body, principal, s
   return response(404,{error:{code:"not_found",message:"Control-plane route not found."}});
 }
 
+/** @param {any} config */
 function validateRoutingConfig(config) {
   if (!config || typeof config!=="object" || Array.isArray(config) || !config.aliases || typeof config.aliases!=="object") return "config.aliases must be an object.";
   for (const [alias,routes] of Object.entries(config.aliases)) {

@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ApiKeyService, verifyApiKey } from "../src/api-keys.js";
-import { OpenAIAdapter, AnthropicAdapter, ProviderError } from "../src/providers.js";
+import { OpenAIAdapter, OpenAIResponsesAdapter, AnthropicAdapter, ProviderError } from "../src/providers.js";
 import { PolicyRouter } from "../src/policy-router.js";
 import { MemoryLedger } from "../src/ledger.js";
 import { MockProvider } from "../src/mock-provider.js";
 import { createGateway } from "../src/gateway.js";
+import { handleAdminRequest } from "../src/admin-api.js";
 
 const pepper = "test-pepper-with-at-least-thirty-two-characters";
 
@@ -35,7 +36,7 @@ test("OpenAI and Anthropic adapters normalize response text, usage, cost, and re
   }});
   const a=await openai.invoke({route,prompt:"hi",maxTokens:16,requestId:"req_1"});
   assert.equal(a.response,"hello");
-  assert.equal(a.provider_request_id,"upstream_1");
+  assert.equal(a.provider_request_id,"chat_1");
   assert.equal(a.usage.input_tokens,10);
   assert.equal(a.usage.output_tokens,4);
   assert.equal(a.usage.cost_uusd,52);
@@ -65,6 +66,41 @@ test("provider connection uncertainty prevents duplicate-charge failover", async
   const failoverRoutes=await router.getFailovers(route,{prompt:"x",maxTokens:1});
   await assert.rejects(router.invoke(route,{prompt:"x",maxTokens:1,failoverRoutes}),error=>error instanceof ProviderError&&error.outcomeUnknown);
   assert.equal(backupCalls,0);
+});
+
+test("OpenAI Responses adapter persists response IDs and reconciles usage by response ID", async () => {
+  const savedIds=[];
+  const route={provider:"openai",model:"gpt-test",alias:"fast",pricing_version:"p1",config_version:"c1",pricing:{input_usd_per_million:2,output_usd_per_million:8}};
+  const adapter=new OpenAIResponsesAdapter({apiKey:"test-secret",baseUrl:"https://provider.test/v1",fetchImpl:async(url,init)=>{
+    if(init.method==="GET"){
+      assert.equal(url,"https://provider.test/v1/responses/resp_1");
+      return new Response(JSON.stringify({id:"resp_1",status:"completed",usage:{input_tokens:10,output_tokens:4}}),{status:200});
+    }
+    assert.equal(url,"https://provider.test/v1/responses");
+    assert.equal(JSON.parse(init.body).store,true);
+    return new Response(JSON.stringify({id:"resp_1",status:"completed",output_text:"hello",usage:{input_tokens:10,output_tokens:4}}),{status:200});
+  }});
+  const invoked=await adapter.invoke({route,prompt:"hi",maxTokens:8,onProviderRequestId:id=>savedIds.push(id)});
+  assert.equal(invoked.response,"hello");
+  assert.equal(invoked.provider_request_id,"resp_1");
+  assert.deepEqual(savedIds,["resp_1"]);
+  const result=await adapter.reconcile({providerRequestId:"resp_1",route});
+  assert.equal(result.kind,"usage");
+  assert.equal(result.usage.input_tokens,10);
+  assert.equal(result.usage.output_tokens,4);
+  assert.equal(result.usage.cost_uusd,52);
+});
+
+test("deterministic mock receipts can reconcile after the request handler loses its response", async () => {
+  const provider=new MockProvider();
+  const route={provider:"mock",model:"mock-chat-v1",alias:"demo-model",region:"global",config_version:"cfg-1",pricing_version:"mock-v1",pricing:{input_usd_per_million:1,output_usd_per_million:1}};
+  const ids=[];
+  const result=await provider.invoke({route,requestId:"req_mock_reconcile",onProviderRequestId:id=>ids.push(id)});
+  assert.equal(result.kind,"success");
+  assert.deepEqual(ids,["mock:req_mock_reconcile"]);
+  const reconciled=await provider.reconcile({providerRequestId:ids[0],requestId:"req_mock_reconcile",route});
+  assert.equal(reconciled.kind,"usage");
+  assert.equal(reconciled.usage.cost_uusd,340_000);
 });
 
 test("known pre-execution provider failures may fail over without recording a second charge", async () => {
@@ -146,4 +182,69 @@ test("SSE stream settles partial usage after client disconnect and cancels provi
   assert.equal(overview.entries.length,1);
   assert.equal(overview.entries[0].status,"partial");
   assert.equal(overview.budget.reserved_uusd,0);
+});
+
+test("tenant administrators cannot read or mutate platform-wide control-plane resources", async () => {
+  const calls=[];
+  const store={
+    async listTenants(){calls.push("listTenants");return [];},
+    async createTenant(){calls.push("createTenant");return {};},
+    async listPricingVersions(){calls.push("listPricingVersions");return [];},
+    async createPricingVersion(){calls.push("createPricingVersion");return {};}
+  };
+  const principal={tenantId:"tenant_a",userId:"admin_a",role:"admin",scopes:["control:read","control:write"],platformAdmin:false};
+  for (const [method,path,body] of [
+    ["GET","/v1/admin/tenants",null],
+    ["POST","/v1/admin/tenants",{tenant_id:"tenant_b",name:"Other tenant",monthly_limit_uusd:100,reason:"test"}],
+    ["GET","/v1/admin/pricing",null],
+    ["POST","/v1/admin/pricing",{provider:"mock",model:"m",region:"global",unit:"token",version:"v1",effective_at:"2026-01-01T00:00:00Z",reason:"test"}]
+  ]) {
+    const result=await handleAdminRequest({method,path,url:new URL("http://gateway.local"+path),body,principal,store});
+    assert.equal(result.status,403,`${method} ${path} must be platform-admin only`);
+    assert.equal(result.body.error.code,"platform_admin_required");
+  }
+  assert.deepEqual(calls,[]);
+});
+
+test("platform-wide control-plane access requires a server-configured platform identity", async () => {
+  const principal={tenantId:"tenant_a",userId:"platform_user",role:"admin",scopes:["control:read","control:write"],platformAdmin:true};
+  const store={async listTenants(){return [{tenant_id:"tenant_a"}]}};
+  const result=await handleAdminRequest({method:"GET",path:"/v1/admin/tenants",url:new URL("http://gateway.local/v1/admin/tenants"),body:null,principal,store});
+  assert.equal(result.status,200);
+  assert.deepEqual(result.body.tenants,[{tenant_id:"tenant_a"}]);
+});
+
+test("non-stream client cancellation aborts provider work and leaves usage pending reconciliation", async () => {
+  const store=new MemoryLedger({tenants:[{id:"tenant_cancel",name:"Cancellation",limit_uusd:1_000_000,seeded_settled_uusd:0}]});
+  let providerStarted;
+  const started=new Promise(resolve=>{providerStarted=resolve;});
+  let providerCalls=0;
+  const provider={
+    name:"mock",
+    async quote(){return 340_000;},
+    async invoke({signal}){
+      providerCalls++;
+      providerStarted();
+      return new Promise((resolve,reject)=>{
+        if(signal.aborted) return reject(new ProviderError("client disconnected",{provider:"mock",retryable:false,outcomeUnknown:true,code:"client_cancelled"}));
+        signal.addEventListener("abort",()=>reject(new ProviderError("client disconnected",{provider:"mock",retryable:false,outcomeUnknown:true,code:"client_cancelled"})),{once:true});
+      });
+    }
+  };
+  const providers=new Map([["mock",provider]]);
+  const router=new PolicyRouter({providers,store,config:{version:"test-v1",aliases:{"demo-model":[{provider:"mock",model:"mock-chat-v1",priority:1,weight:1,max_cost_uusd:340_000}]},tenants:{}}});
+  const gateway=createGateway({mode:"test",credentials:new Map([["cancel-token","tenant_cancel"]]),store,providers,router});
+  const controller=new AbortController();
+  const pending=gateway.handle({method:"POST",path:"/v1/chat/completions",headers:{authorization:"Bearer cancel-token","idempotency-key":"cancel-1"},signal:controller.signal,body:{model:"demo-model",messages:[{role:"user",content:"synthetic cancellation test"}],max_tokens:10}});
+  await started;
+  controller.abort();
+  const result=await pending;
+  assert.equal(providerCalls,1);
+  assert.equal(result.status,502);
+  assert.equal(result.body.error.settlement_state,"reconcile_required");
+  assert.equal(result.body.error.code,"provider_error");
+  const reservation=store.getReservation(`res_${result.body.error.request_id}`);
+  assert.equal(reservation.state,"reconcile_required");
+  assert.equal(store.getOverview("tenant_cancel").entries.length,0);
+  assert.equal(store.getBudget("tenant_cancel").reserved_uusd,340_000);
 });

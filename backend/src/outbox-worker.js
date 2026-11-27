@@ -1,6 +1,7 @@
 import { gatewayMetrics } from "./observability.js";
 
 export class OutboxWorker {
+  /** @param {{store:import("./contracts.js").WorkerStore,publish:(payload:Record<string,unknown>,meta:{idempotencyKey:string,eventId:number})=>Promise<unknown>,batchSize?:number,maxAttempts?:number,staleAfterMs?:number}} options */
   constructor({ store, publish, batchSize = 50, maxAttempts = 12, staleAfterMs = 60_000 } = {}) {
     if(!store?.claimOutboxEvents||!store?.markOutboxPublished||!store?.retryOutbox)throw new Error("OutboxWorker requires a durable outbox store.");
     if(typeof publish!=="function")throw new Error("OutboxWorker requires an idempotent event publisher.");

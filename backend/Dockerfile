@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
-COPY --chown=node:node server.mjs ./
+COPY --chown=node:node server.mjs workers.mjs ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node scripts ./scripts
