@@ -46,6 +46,10 @@ npm test
 
 The PostgreSQL integration cases require `AEGIS_TEST_DATABASE_URL`. GitHub Actions starts PostgreSQL and rejects a test run with skipped cases. Local results and any environment blockers are recorded in [Step 9 verification](docs/STEP9_TEST_VERIFICATION.md).
 
+## Controlled load and provider checks
+
+Two guarded manual utilities are available: the mock-only load runner and the capped OpenAI/Anthropic compatibility runner. Both require explicit confirmation, use synthetic test tenants, and verify usage in the API ledger. They are not run automatically in CI because provider checks can incur charges. See [provider test instructions](docs/LIVE_PROVIDER_TESTS.md) and [load/crash results](docs/FAILURE_TEST_RESULTS.md).
+
 ## Provider and admin configuration
 
 Keep provider keys, the API-key pepper, database URLs, metrics credentials, and admin bootstrap values in a secret manager or deployment environment. Never put them in frontend variables or commit `.env`.
