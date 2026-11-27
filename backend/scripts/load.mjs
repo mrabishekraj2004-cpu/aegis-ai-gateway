@@ -13,7 +13,7 @@ const results=[];
 let next=0;
 async function worker(){
   while(next<count){
-    const index=next++;
+    next++;
     const started=performance.now();
     try{
       const response=await fetch(new URL("/v1/chat/completions",baseUrl),{
