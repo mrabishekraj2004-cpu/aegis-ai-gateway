@@ -1,7 +1,7 @@
 # Feature completion audit
 
 **Updated:** 2026-11-27  
-**Source:** PR stack based on repository `main` at `3790b9eb482cf73d913aaf563cb21c97b99a073d`. PR #1 and PR #2 CI/Security passed; PR #3 CI/Security also passed after the frontend image fix. PR #4 adds capped verification utilities; its CI is pending.  
+**Source:** PR stack based on repository `main` at `3790b9eb482cf73d913aaf563cb21c97b99a073d`. PR #1 and PR #2 CI/Security passed; PR #3 CI/Security also passed after the frontend image fix. PR #4 CI and Security checks passed; backend checks and the fail-closed guard tests are green.  
 **Conclusion:** The high-impact work has meaningful implementation progress but is not all complete or production-ready. Provider limitations, live validation, and a hosted full-stack deployment remain open.
 
 ## Verified checks
@@ -11,10 +11,11 @@
 | PR #1 PostgreSQL CI | Passed with zero skipped PostgreSQL tests. |
 | PR #2 CI and Security workflows | Passed. |
 | PR #3 CI and Security workflows | Passed after removing unused npm tooling from the frontend runtime image. |
-| PR #4 script syntax and fail-closed guard tests | Added; GitHub CI pending. |
-| Backend syntax, TypeScript, ESLint | Passed locally on the PR #2 snapshot. |
-| Backend tests | Latest local snapshot: 30 passed, 0 failed, 10 skipped because this runner had no test database URL. The same PostgreSQL checks passed in PR #1 GitHub CI with zero skips. |
-| Frontend syntax and tests | 14 passed, 0 failed, 0 skipped in the last completed run. |
+| PR #4 CI | Passed in GitHub Actions: syntax, TypeScript, ESLint, backend tests (43 passed, 0 failed, 0 skipped), PostgreSQL integration included, and frontend tests (14 passed, 0 failed, 0 skipped). |
+| PR #4 Security workflow | Passed. |
+| Backend syntax, TypeScript, ESLint | Passed in PR #4 GitHub Actions. |
+| Backend tests | PR #4 GitHub Actions: 43 passed, 0 failed, 0 skipped with PostgreSQL service; local snapshot still had 30 passed and 10 database skips before runner access was lost. |
+| Frontend syntax and tests | PR #4 GitHub Actions: 14 passed, 0 failed, 0 skipped. |
 | Compose and observability YAML / Grafana JSON parsing | Passed after the final PR #3 configuration changes. |
 | Docker stack startup | Not run: Docker Desktop engine pipe npipe:////./pipe/dockerDesktopLinuxEngine is unavailable (The system cannot find the file specified.). |
 | Real OpenAI / Anthropic calls | Not run: provider credentials are not configured in this workspace. |
