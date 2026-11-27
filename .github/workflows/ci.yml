@@ -36,10 +36,10 @@ jobs:
           node-version: 22
       - name: Install backend dependencies
         working-directory: backend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Backend syntax checks
         working-directory: backend
-        run: npm run check
+        run: npm run check && npm run typecheck && npm run lint
       - name: Verify no PostgreSQL tests were skipped
         working-directory: backend
         shell: bash
@@ -58,7 +58,7 @@ jobs:
           fi
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Frontend syntax checks and tests
         working-directory: frontend
         run: npm run check && npm test

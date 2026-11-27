@@ -76,7 +76,7 @@ export class PolicyRouter {
     }
   }
 
-  async resolveRoute(alias, { tenantId, requestId, maxCostUusd = Number.MAX_SAFE_INTEGER } = {}) {
+  async resolveRoute(alias, { tenantId, requestId } = {}) {
     const config = await this.store?.getActiveRoutingConfig?.(tenantId) ?? this.config;
     const tenantPolicy = config.tenants?.[tenantId] ?? {};
     const allowed = new Set(tenantPolicy.model_allowlist ?? Object.keys(config.aliases ?? {}));
@@ -188,7 +188,7 @@ export class PolicyRouter {
     const primaryQuote=await this.quote({route,prompt,maxTokens,scenario});
     const eligible=[];
     for(const candidate of routes){
-      try{const quote=await this.quote({route:candidate,prompt,maxTokens,scenario});if(quote<=primaryQuote&&(candidate.max_cost_uusd==null||quote<=candidate.max_cost_uusd))eligible.push(candidate);}catch{}
+      try{const quote=await this.quote({route:candidate,prompt,maxTokens,scenario});if(quote<=primaryQuote&&(candidate.max_cost_uusd==null||quote<=candidate.max_cost_uusd))eligible.push(candidate);}catch{ /* An unpriceable failover route is ineligible. */ }
     }
     return eligible;
   }
