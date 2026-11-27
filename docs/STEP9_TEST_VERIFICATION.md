@@ -1,5 +1,7 @@
 # Step 9 — Test Verification
 
+> **Follow-up audit (2026-11-27):** This file records the earlier Step 8 source snapshot and is not a verification record for the production-feature changes that followed. The current feature audit is [FEATURE_COMPLETION_AUDIT.md](FEATURE_COMPLETION_AUDIT.md). On that newer snapshot, backend checks passed with **22 passed, 0 failed, 9 skipped**; frontend checks passed with **14 passed, 0 failed, 0 skipped**. PostgreSQL tests remain unrun, and no live HTTP/browser/provider verification was completed. Treat the historical counts and source digest below as historical only.
+
 **Date:** 2026-11-27  
 **Outcome:** **Blocked for Step 10 deployment.** Frontend and backend suites pass at the Step 8 baseline. Live browser/API verification and all seven PostgreSQL integration checks remain pending because this workspace cannot reach loopback sockets, `git.chatgpt-team.site`, or the npm registry.  
 **Scope:** No gateway or frontend source fixes were made. A local static demo snapshot was committed and packaged for the existing private Site, but source push and publication were blocked. With the user's approval, an isolated Neon test project was created; no schema or test data has been written to it.

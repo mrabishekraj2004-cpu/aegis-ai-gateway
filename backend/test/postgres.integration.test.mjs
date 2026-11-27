@@ -5,8 +5,10 @@ import { migrate } from "../src/migrations.js";
 import { PostgresLedger } from "../src/postgres-ledger.js";
 import { createGateway } from "../src/gateway.js";
 import { MockProvider } from "../src/mock-provider.js";
+import { ReconciliationWorker } from "../src/reconciliation-worker.js";
 
 const databaseUrl = process.env.AEGIS_TEST_DATABASE_URL;
+if (process.env.CI && !databaseUrl) throw new Error("CI requires AEGIS_TEST_DATABASE_URL; PostgreSQL integration checks may not be skipped.");
 const testPg = databaseUrl ? test : test.skip;
 const sampleBody = {
   model: "demo-model",
@@ -49,12 +51,12 @@ const settleUsage = {
 
 testPg("fresh PostgreSQL schema migrates and migration reruns are idempotent", async () => {
   await isolatedDatabase(async ({ poolA, migration }) => {
-    assert.deepEqual(migration.applied, ["001"]);
+    assert.deepEqual(migration.applied, ["001", "002"]);
     const rerun = await migrate(poolA);
     assert.deepEqual(rerun.applied, []);
     const tables = await poolA.query("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()");
     const names = new Set(tables.rows.map(row => row.table_name));
-    for (const name of ["tenants", "budget_windows", "reservations", "usage_entries", "idempotency_records", "aegis_schema_migrations"]) {
+    for (const name of ["tenants", "budget_windows", "reservations", "usage_entries", "idempotency_records", "api_keys", "tenant_memberships", "ledger_events", "billing_outbox", "reconciliation_jobs", "aegis_schema_migrations"]) {
       assert.ok(names.has(name), `missing ${name}`);
     }
   });
@@ -174,5 +176,44 @@ testPg("provider failure persists a reconciliation reservation without usage", a
     assert.equal((await store.getBudget("tenant_failure")).reserved_uusd, 340_000);
     assert.equal(await store.getUsageCount("tenant_failure"), 0);
     assert.equal(provider.calls, 1);
+  });
+});
+
+testPg("crash recovery releases pre-provider reservations and settles confirmed provider usage once", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store=new PostgresLedger({pool:poolA});
+    await store.seedTenant({id:"tenant_crash",name:"Crash Recovery",limit_uusd:1_000_000});
+    const beforeProvider=await store.reserve({tenantId:"tenant_crash",requestId:"req_crash_reserved",quoteUusd:340_000});
+    const afterProvider=await store.reserve({tenantId:"tenant_crash",requestId:"req_crash_success",quoteUusd:340_000});
+    await store.markProviderStarted({reservationId:afterProvider.reservation.reservation_id,provider:"mock",configVersion:"cfg-7",pricingVersion:"price-2"});
+    await store.markProviderRequest(afterProvider.reservation.reservation_id,"provider_receipt_synthetic");
+    await poolA.query("UPDATE reconciliation_jobs SET next_attempt_at=now()-interval '1 second' WHERE reservation_id=ANY($1::text[])",[[beforeProvider.reservation.reservation_id,afterProvider.reservation.reservation_id]]);
+    const worker=new ReconciliationWorker({store,providers:new Map([["mock",{reconcile:async()=>({kind:"usage",usage:settleUsage})}]]),staleAfterMs:0});
+    const result=await worker.runOnce();
+    assert.deepEqual(result.results.map(item=>item.outcome).sort(),["released_unstarted","settled"]);
+    const duplicate=await worker.runOnce();
+    assert.equal(duplicate.claimed,0);
+    const overview=await store.getOverview("tenant_crash");
+    assert.equal(overview.entries.length,1);
+    assert.equal(overview.budget.settled_uusd,340_000);
+    assert.equal(overview.budget.reserved_uusd,0);
+    assert.equal(overview.entries[0].request_id,"req_crash_success");
+  });
+});
+
+testPg("user request, token, cost, and concurrency quotas are reserved atomically", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store=new PostgresLedger({pool:poolA});
+    await store.seedTenant({id:"tenant_quota",name:"Quota Tenant",limit_uusd:1_000_000});
+    await store.createQuotaPolicy({tenantId:"tenant_quota",principalId:"user_quota",period:"day",requestLimit:1,tokenLimit:1000,costLimitUusd:340_000,concurrencyLimit:1,actor:"user_quota",reason:"integration test"});
+    const first=await store.reserve({tenantId:"tenant_quota",userId:"user_quota",requestId:"req_quota_1",quoteUusd:340_000,quoteTokens:170});
+    assert.equal(first.admitted,true);
+    const concurrent=await store.reserve({tenantId:"tenant_quota",userId:"user_quota",requestId:"req_quota_2",quoteUusd:1,quoteTokens:1});
+    assert.equal(concurrent.admitted,false);
+    assert.equal(concurrent.reason,"concurrency_limit");
+    await store.releaseReservation({reservationId:first.reservation.reservation_id,reason:"test_release"});
+    const afterRelease=await store.reserve({tenantId:"tenant_quota",userId:"user_quota",requestId:"req_quota_3",quoteUusd:1,quoteTokens:1});
+    assert.equal(afterRelease.admitted,false);
+    assert.equal(afterRelease.reason,"quota_exceeded");
   });
 });

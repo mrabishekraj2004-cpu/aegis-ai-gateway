@@ -1,0 +1,82 @@
+const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const views=["tenants","members","keys","routes","quotas","pricing","providers","reconciliation","audit"];
+const titles={tenants:"Tenants",members:"Users & access",keys:"API keys",routes:"Routes & policies",quotas:"Budgets & quotas",pricing:"Pricing versions",providers:"Provider health",reconciliation:"Reconciliation",audit:"Audit events"};
+const endpoint={tenants:"listTenants",members:"listMembers",keys:"listApiKeys",routes:"listRoutingConfigs",quotas:"listQuotas",pricing:"listPricing",providers:"getProviderHealth",reconciliation:"listReconciliation",audit:"listAuditEvents"};
+
+function rowsHtml(rows,columns){
+  if(!rows?.length)return '<p class="empty-state">Nothing to show yet.</p>';
+  return `<div class="table-scroll"><table class="data-table"><thead><tr>${columns.map(([label])=>`<th scope="col">${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(([,key])=>`<td>${escapeHtml(typeof key==="function"?key(row):row[key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+export function attachAdmin({adapter,mode}){
+  const root=document.querySelector("#admin-console");
+  if(!root)return;
+  const status=root.querySelector("[data-admin-status]");
+  const content=root.querySelector("[data-admin-content]");
+  const tabs=root.querySelector("[data-admin-tabs]");
+  let active="tenants";
+  let cached={};
+  let freshKey=null;
+  const setStatus=(message,kind="info")=>{status.textContent=message;status.dataset.kind=kind;};
+
+  async function load(view=active){
+    active=view;
+    tabs.querySelectorAll("[data-admin-view]").forEach(button=>{const on=button.dataset.adminView===view;button.classList.toggle("active",on);button.setAttribute("aria-selected",String(on));});
+    if(mode!=="api"||typeof adapter?.[endpoint[view]]!=="function"){
+      content.innerHTML='<div class="panel configuration-state"><div class="configuration-icon">A</div><div><p class="section-label">ADMIN SESSION REQUIRED</p><h2>Connect the gateway control plane</h2><p>This screen needs an authenticated administrator session from the host application. It never reads a credential from local storage or a URL.</p></div></div>';
+      setStatus("Administration is unavailable in fixture mode.","warning");return;
+    }
+    setStatus(`Loading ${titles[view].toLowerCase()}…`);
+    try{cached[view]=await adapter[endpoint[view]]();render(view,cached[view]);setStatus(`${titles[view]} loaded.`);}
+    catch(error){content.innerHTML=`<div class="panel configuration-state"><div><p class="section-label">ACCESS CHECK</p><h2>${escapeHtml(error.message)}</h2><p>Use a live, administrator-authorized session to read or change this workspace.</p></div></div>`;setStatus("Control-plane request failed.","error");}
+  }
+
+  function render(view,data){
+    const head=`<div class="admin-section-head"><div><p class="section-label">CONTROL PLANE</p><h2>${titles[view]}</h2></div><button class="quiet-button" type="button" data-admin-refresh>Refresh</button></div>`;
+    if(view==="tenants")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="tenant"><h3>Add tenant</h3><div class="admin-form-grid"><label>Tenant ID<input class="control" name="tenant_id" required pattern="[a-zA-Z0-9_-]+"></label><label>Name<input class="control" name="name" required></label><label>Monthly limit (uUSD)<input class="control" name="monthly_limit_uusd" type="number" min="0" step="1" required></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-primary button-small">Create tenant</button></form>`+rowsHtml(data.tenants,[ ["Tenant ID","tenant_id"],["Name","name"],["Monthly limit (uUSD)","monthly_limit_uusd"],["Status",r=>r.active?"Active":"Disabled"] ]);
+    else if(view==="members")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="member"><h3>Add or update member</h3><div class="admin-form-grid"><label>User ID<input class="control" name="user_id" required></label><label>Email<input class="control" name="email" type="email" required></label><label>Name<input class="control" name="display_name" required></label><label>Role<select class="control" name="role"><option>viewer</option><option>operator</option><option>admin</option><option>owner</option></select></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-primary button-small">Save member</button></form>`+rowsHtml(data.members,[ ["User ID","user_id"],["Email","email"],["Name","display_name"],["Role","role"],["Status",r=>r.active?"Active":"Disabled"] ]);
+    else if(view==="keys")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="key"><h3>Create API key</h3><div class="admin-form-grid"><label>Name<input class="control" name="name" required></label><label>Member user ID<input class="control" name="user_id" placeholder="Use your own member ID"></label><label>Environment<select class="control" name="environment"><option value="live">Live</option><option value="test">Test</option></select></label><label>Expires at<input class="control" name="expires_at" type="datetime-local"></label><label>Scopes (comma separated)<input class="control" name="scopes" value="gateway:invoke,usage:read" required></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-primary button-small">Create key</button><div class="one-time-key" ${freshKey?"":"hidden"}><label>Copy this key now. It cannot be displayed again.<textarea class="control" readonly rows="3" data-key-value>${escapeHtml(freshKey??"")}</textarea></label><button class="quiet-button" type="button" data-copy-key>Copy key</button><button class="quiet-button" type="button" data-dismiss-key>Dismiss</button></div></form><form class="panel admin-form" data-key-actions><h3>Rotate or revoke a key</h3><div class="admin-form-grid"><label>Active key<select class="control" name="key_id" required>${(data.keys??[]).filter(r=>!r.revoked_at).map(r=>`<option value="${escapeHtml(r.key_id)}">${escapeHtml(r.name)} · ${escapeHtml(r.key_prefix)}</option>`).join("")}</select></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-secondary button-small" type="button" data-key-do="rotate">Rotate</button> <button class="button button-danger button-small" type="button" data-key-do="revoke">Revoke</button></form>`+rowsHtml(data.keys,[ ["Name","name"],["Prefix","key_prefix"],["Member","user_id"],["Scopes",r=>r.scopes?.join(", ")],["Created","created_at"],["Expires","expires_at"],["Last used","last_used_at"],["Revoked",r=>r.revoked_at?"Yes":"No"] ]);
+    else if(view==="routes")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="route"><h3>Draft routing policy</h3><label>Configuration JSON<textarea class="control" name="config" rows="10" required>{"aliases":{"example-model":[{"provider":"openai","model":"gpt-4.1-mini","priority":1,"weight":100,"region":"global","max_cost_uusd":1000000,"max_latency_ms":3000}]},"tenants":{}}</textarea></label><label>Reason<input class="control" name="reason" required></label><button class="button button-primary button-small">Save draft</button></form>`+`<div class="admin-stack">${(data.configurations??[]).map(row=>`<article class="panel admin-record"><div><p class="section-label">VERSION ${escapeHtml(row.version_id)}</p><h3>${escapeHtml(row.state)}</h3><p>${escapeHtml(row.reason)}</p><pre>${escapeHtml(JSON.stringify(row.config,null,2))}</pre></div>${row.state==="draft"?`<form data-admin-form="publish" data-version="${escapeHtml(row.version_id)}"><label>Publish reason<input class="control" name="reason" required></label><button class="button button-secondary button-small">Publish</button></form>`:""}</article>`).join("")||'<p class="empty-state">No route versions yet.</p>'}</div>`;
+    else if(view==="quotas")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="quota"><h3>Add tenant, user, or key quota</h3><div class="admin-form-grid"><label>Period<select class="control" name="period"><option>day</option><option>month</option></select></label><label>User ID (optional)<input class="control" name="principal_id"></label><label>API key ID (optional)<input class="control" name="api_key_id"></label><label>Request limit<input class="control" name="request_limit" type="number" min="0"></label><label>Token limit<input class="control" name="token_limit" type="number" min="0"></label><label>Cost limit (uUSD)<input class="control" name="cost_limit_uusd" type="number" min="0"></label><label>Concurrency limit<input class="control" name="concurrency_limit" type="number" min="0"></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-primary button-small">Create quota</button></form>`+rowsHtml(data.policies,[ ["ID","quota_id"],["Period","period"],["User","principal_id"],["API key","api_key_id"],["Requests","request_limit"],["Tokens","token_limit"],["Cost (uUSD)","cost_limit_uusd"],["Concurrency","concurrency_limit"],["Active",r=>r.active?"Yes":"No"] ]);
+    else if(view==="pricing")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="pricing"><h3>Publish a pricing version</h3><div class="admin-form-grid"><label>Provider<input class="control" name="provider" required></label><label>Model<input class="control" name="model" required></label><label>Region<input class="control" name="region" value="global" required></label><label>Unit<select class="control" name="unit"><option>token</option><option>request</option><option>image</option><option>second</option></select></label><label>Input USD / million<input class="control" name="input_usd_per_million" type="number" min="0" step="0.000001" value="0"></label><label>Output USD / million<input class="control" name="output_usd_per_million" type="number" min="0" step="0.000001" value="0"></label><label>Version<input class="control" name="version" required></label><label>Effective at<input class="control" name="effective_at" type="datetime-local" required></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-primary button-small">Publish pricing</button></form>`+rowsHtml(data.versions,[ ["Provider","provider"],["Model","model"],["Region","region"],["Unit","unit"],["Input USD/M","input_usd_per_million"],["Output USD/M","output_usd_per_million"],["Version","version"],["Effective","effective_at"] ]);
+    else if(view==="providers")content.innerHTML=head+rowsHtml(data.providers,[ ["Provider","name"],["Status","status"] ]);
+    else if(view==="reconciliation")content.innerHTML=head+`<h3>Open cases</h3>`+rowsHtml(data.jobs,[ ["Request","request_id"],["Provider","provider"],["Provider request","provider_request_id"],["State","state"],["Attempts","attempts"],["Reserved (uUSD)","quote_uusd"],["Last error","last_error"] ])+`<h3>Dead letters</h3>`+rowsHtml(data.dead_letters,[ ["Request","reservation_id"],["Reason","reason"],["Attempts","attempts"],["Created","created_at"] ]);
+    else content.innerHTML=head+rowsHtml(data.events,[ ["Time","created_at"],["Actor","actor_id"],["Action","action"],["Reason","reason"],["Target","target_type"],["Correlation ID","correlation_id"] ]);
+  }
+
+  async function submit(form){
+    const values=Object.fromEntries(new FormData(form).entries());
+    const number=(key)=>values[key]===""?null:Number(values[key]);
+    try{
+      if(form.dataset.adminForm==="tenant")await adapter.createTenant({tenant_id:values.tenant_id,name:values.name,monthly_limit_uusd:Number(values.monthly_limit_uusd),reason:values.reason});
+      if(form.dataset.adminForm==="member")await adapter.createMember(values);
+      if(form.dataset.adminForm==="key"){
+        const created=await adapter.createApiKey({...values,scopes:values.scopes.split(",").map(s=>s.trim()).filter(Boolean),expires_at:values.expires_at?new Date(values.expires_at).toISOString():null});
+        freshKey=created.key;cached.keys=await adapter.listApiKeys();render("keys",cached.keys);setStatus("API key created. Copy it now; the server will never show it again.","warning");return;
+      }
+      if(form.dataset.adminForm==="route")await adapter.createRoutingDraft({config:JSON.parse(values.config),reason:values.reason});
+      if(form.dataset.adminForm==="quota")await adapter.createQuota({...values,principal_id:values.principal_id||null,api_key_id:values.api_key_id||null,request_limit:number("request_limit"),token_limit:number("token_limit"),cost_limit_uusd:number("cost_limit_uusd"),concurrency_limit:number("concurrency_limit")});
+      if(form.dataset.adminForm==="pricing")await adapter.createPricing({...values,input_usd_per_million:Number(values.input_usd_per_million),output_usd_per_million:Number(values.output_usd_per_million),effective_at:new Date(values.effective_at).toISOString()});
+      if(form.dataset.adminForm==="publish")await adapter.publishRoutingConfig(form.dataset.version,values.reason);
+      if(form.dataset.adminForm!=="key")setStatus("Change saved and recorded in the audit trail.","success");
+      await load(active);
+    }catch(error){setStatus(error.message,"error");}
+  }
+
+  tabs.addEventListener("click",event=>{const button=event.target.closest("[data-admin-view]");if(button)load(button.dataset.adminView);});
+  root.addEventListener("click",async event=>{
+    if(event.target.closest("[data-admin-refresh]")){load(active);return;}
+    if(event.target.closest("[data-copy-key]")){const field=content.querySelector("[data-key-value]");try{await navigator.clipboard.writeText(field.value);setStatus("One-time API key copied.","success");}catch{field.focus();field.select();setStatus("Select and copy the one-time key.","warning");}}
+    if(event.target.closest("[data-dismiss-key]")){freshKey=null;render("keys",cached.keys??{keys:[]});setStatus("One-time key removed from this page.");}
+    const keyAction=event.target.closest("[data-key-do]");
+    if(keyAction){const form=root.querySelector("[data-key-actions]");if(!form.reportValidity())return;const keyId=new FormData(form).get("key_id");const reason=new FormData(form).get("reason");try{if(keyAction.dataset.keyDo==="rotate"){const rotated=await adapter.rotateApiKey(keyId,reason);freshKey=rotated.key;setStatus("Key rotated. Copy the new key now; the previous key is revoked.","warning");}else{await adapter.revokeApiKey(keyId,reason);freshKey=null;setStatus("API key revoked.","success");}cached.keys=await adapter.listApiKeys();render("keys",cached.keys);}catch(error){setStatus(error.message,"error");}}
+  });
+  root.addEventListener("submit",event=>{const form=event.target.closest("[data-admin-form]");if(form){event.preventDefault();if(form.reportValidity())submit(form);}});
+  document.addEventListener("click",event=>{
+    const jump=event.target.closest("[data-admin-open]");
+    if(jump)requestAnimationFrame(()=>load(jump.dataset.adminOpen));
+    else if(event.target.closest('[data-page="admin"]'))requestAnimationFrame(()=>load("tenants"));
+  });
+  if(!document.querySelector("#page-admin")?.hidden)load("tenants");
+  return {load};
+}

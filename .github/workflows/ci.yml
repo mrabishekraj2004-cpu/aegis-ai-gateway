@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aegis
+          POSTGRES_PASSWORD: aegis_ci_only
+          POSTGRES_DB: aegis_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aegis -d aegis_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CI: "true"
+      AEGIS_TEST_DATABASE_URL: postgres://aegis:aegis_ci_only@localhost:5432/aegis_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install --no-audit --no-fund
+      - name: Backend syntax checks
+        working-directory: backend
+        run: npm run check
+      - name: Verify no PostgreSQL tests were skipped
+        working-directory: backend
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(npm test 2>&1)"
+          printf '%s\n' "$output"
+          if ! grep -q 'ℹ skipped 0' <<< "$output"; then
+            echo 'PostgreSQL CI must complete with zero skipped tests.' >&2
+            exit 1
+          fi
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Frontend syntax checks and tests
+        working-directory: frontend
+        run: npm run check && npm test
+

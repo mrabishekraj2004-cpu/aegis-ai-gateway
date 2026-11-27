@@ -1,0 +1,48 @@
+groups:
+  - name: aegis-gateway-slos
+    interval: 30s
+    rules:
+      - alert: AegisAvailabilityBelowSLO
+        expr: 1 - (sum(rate(aegis_gateway_responses_total{status=~"5.."}[5m])) / clamp_min(sum(rate(aegis_gateway_responses_total[5m])), 0.001)) < 0.999
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: Gateway availability is below the 99.9% objective.
+          runbook: docs/runbooks/provider-outage.md
+      - alert: AegisGatewayOverheadHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(aegis_gateway_overhead_ms_bucket[5m]))) > 100
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: Gateway-only p95 overhead is above 100 ms.
+      - alert: AegisProviderLatencyHigh
+        expr: histogram_quantile(0.95, sum by (provider, le) (rate(aegis_provider_latency_ms_bucket[5m]))) > 5000
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: Provider p95 latency is above 5 seconds.
+      - alert: AegisProviderErrors
+        expr: sum by (provider) (rate(aegis_provider_errors_total[5m])) > 0.1
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: Provider errors are sustained above the baseline.
+      - alert: AegisReconciliationBacklogOld
+        expr: aegis_reconciliation_backlog > 0 and aegis_reconciliation_oldest_age_seconds > 300
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: Reconciliation has unresolved reservations older than five minutes.
+          runbook: docs/runbooks/stuck-reservations.md
+      - alert: AegisOutboxBacklog
+        expr: aegis_outbox_backlog > 100
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: Transactional integration-event outbox is growing.
+      - alert: AegisPricingMismatch
+        expr: increase(aegis_provider_cost_mismatch_total[15m]) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: Provider-reported cost differs from the gateway's versioned price calculation.
+          runbook: docs/runbooks/provider-outage.md

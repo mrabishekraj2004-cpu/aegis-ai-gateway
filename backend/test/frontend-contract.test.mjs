@@ -32,7 +32,9 @@ test("Step 5 HTTP adapter interoperates with the backend contract", async () => 
   const success = await adapter.submitRequest({ model: "demo-model", prompt: "Hello from the frontend", maxTokens: 128 });
   assert.equal(success.kind, "success");
   assert.equal(success.requestId, "req_local_000001");
-  assert.deepEqual(success.route, { provider: "mock", model: "mock-chat-v1" });
+  assert.equal(success.route.provider, "mock");
+  assert.equal(success.route.model, "mock-chat-v1");
+  assert.ok(success.route.config_version);
   assert.equal(success.usage.cost_uusd, 340_000);
   assert.equal(success.budget.settled_uusd, 340_000);
   const overview = await adapter.getOverview();

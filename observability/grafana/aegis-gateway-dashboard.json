@@ -1,0 +1,24 @@
+{
+  "id": null,
+  "uid": "aegis-gateway-core",
+  "title": "Aegis AI Gateway",
+  "tags": ["aegis", "gateway", "slo"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "Gateway requests / second", "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }, "targets": [{ "refId": "A", "expr": "sum(rate(aegis_gateway_responses_total[5m]))", "legendFormat": "requests/s" }] },
+    { "id": 2, "type": "timeseries", "title": "Availability (5xx excluded)", "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }, "targets": [{ "refId": "A", "expr": "1 - (sum(rate(aegis_gateway_responses_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(aegis_gateway_responses_total[5m])), 0.001))", "legendFormat": "availability" }] },
+    { "id": 3, "type": "timeseries", "title": "Gateway overhead p95 (ms)", "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }, "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(aegis_gateway_overhead_ms_bucket[5m])))", "legendFormat": "p95" }] },
+    { "id": 4, "type": "timeseries", "title": "Provider latency p95 (ms)", "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }, "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (provider, le) (rate(aegis_provider_latency_ms_bucket[5m])))", "legendFormat": "{{provider}}" }] },
+    { "id": 5, "type": "timeseries", "title": "Provider errors / second", "gridPos": { "x": 0, "y": 16, "w": 8, "h": 8 }, "targets": [{ "refId": "A", "expr": "sum by (provider) (rate(aegis_provider_errors_total[5m]))", "legendFormat": "{{provider}}" }] },
+    { "id": 6, "type": "timeseries", "title": "Budget denials / second", "gridPos": { "x": 8, "y": 16, "w": 8, "h": 8 }, "targets": [{ "refId": "A", "expr": "sum by (reason) (rate(aegis_budget_denials_total[5m]))", "legendFormat": "{{reason}}" }] },
+    { "id": 7, "type": "stat", "title": "Reconciliation backlog", "gridPos": { "x": 16, "y": 16, "w": 4, "h": 8 }, "targets": [{ "refId": "A", "expr": "aegis_reconciliation_backlog", "legendFormat": "open" }] },
+    { "id": 8, "type": "stat", "title": "Oldest reconciliation age (s)", "gridPos": { "x": 20, "y": 16, "w": 4, "h": 8 }, "targets": [{ "refId": "A", "expr": "aegis_reconciliation_oldest_age_seconds", "legendFormat": "seconds" }] },
+    { "id": 9, "type": "timeseries", "title": "Pricing mismatches / second", "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 }, "targets": [{ "refId": "A", "expr": "sum by (provider) (rate(aegis_provider_cost_mismatch_total[5m]))", "legendFormat": "{{provider}}" }] },
+    { "id": 10, "type": "stat", "title": "Outbox backlog", "gridPos": { "x": 12, "y": 24, "w": 6, "h": 8 }, "targets": [{ "refId": "A", "expr": "aegis_outbox_backlog", "legendFormat": "events" }] },
+    { "id": 11, "type": "timeseries", "title": "Pending reconciliation transitions / second", "gridPos": { "x": 18, "y": 24, "w": 6, "h": 8 }, "targets": [{ "refId": "A", "expr": "sum by (provider) (rate(aegis_reconciliation_pending_total[5m]))", "legendFormat": "{{provider}}" }] }
+  ]
+}

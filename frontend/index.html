@@ -60,6 +60,7 @@
         <a class="nav-link active" href="#overview" data-page="overview" aria-current="page"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg><span>Overview</span></a>
         <a class="nav-link" href="#requests" data-page="requests"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15 15 4M6 4h9v9"/></svg><span>Request lab</span></a>
         <a class="nav-link" href="#usage" data-page="usage"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v7l4 2M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/></svg><span>Usage</span></a>
+        <a class="nav-link" href="#admin" data-page="admin"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14v12H3zM7 8h6M7 11h6M7 14h3"/></svg><span>Administration</span></a>
       </nav>
       <p class="nav-label nav-label-spaced">Workspace settings</p>
       <nav class="nav-list" aria-label="Workspace settings">
@@ -137,13 +138,13 @@
 
         <section id="page-api-keys" class="page-view" aria-labelledby="keys-title" hidden>
           <div class="page-heading"><div><p class="eyebrow">WORKSPACE SETTINGS <span class="eyebrow-divider">/</span> CREDENTIALS</p><h1 id="keys-title">API keys</h1><p class="page-subtitle">Credentials for services that call the gateway.</p></div></div>
-          <section class="panel configuration-state"><div class="configuration-icon" aria-hidden="true">K</div><div><p class="section-label">NOT CONNECTED</p><h2>Key management is not available in this preview.</h2><p>The current backend accepts configured bearer credentials. It does not create, rotate, or revoke keys from this screen.</p><button class="quiet-button" type="button" data-page="settings">View workspace settings <span aria-hidden="true">→</span></button></div></section>
-          <p class="security-note">Never put a production API key in browser code. Create and store credentials on a trusted server.</p>
+          <section class="panel configuration-state"><div class="configuration-icon" aria-hidden="true">K</div><div><p class="section-label">CONTROL PLANE</p><h2>Manage server-created credentials</h2><p>Keys are generated and hashed by the gateway. Their secret is shown once at creation or rotation.</p><button class="button button-primary button-small" type="button" data-page="admin" data-admin-open="keys">Open API key management</button></div></section>
+          <p class="security-note">A key is shown once. Copy it to a trusted secret manager; do not put it in source code or browser storage.</p>
         </section>
 
         <section id="page-team" class="page-view" aria-labelledby="team-title" hidden>
           <div class="page-heading"><div><p class="eyebrow">WORKSPACE SETTINGS <span class="eyebrow-divider">/</span> ACCESS</p><h1 id="team-title">Team</h1><p class="page-subtitle">Workspace membership and roles.</p></div></div>
-          <section class="panel configuration-state"><div class="configuration-icon" aria-hidden="true">T</div><div><p class="section-label">NOT CONNECTED</p><h2>Team access is not configured.</h2><p>This gateway resolves tenant identity from bearer credentials. It does not yet support user accounts, invitations, or workspace roles.</p><button class="quiet-button" type="button" data-page="settings">View profile settings <span aria-hidden="true">→</span></button></div></section>
+          <section class="panel configuration-state"><div class="configuration-icon" aria-hidden="true">T</div><div><p class="section-label">CONTROL PLANE</p><h2>Manage tenant members and roles</h2><p>Membership changes require an administrator session and are recorded in the audit trail.</p><button class="button button-primary button-small" type="button" data-page="admin" data-admin-open="members">Open user access</button></div></section>
         </section>
 
         <section id="page-settings" class="page-view" aria-labelledby="settings-title" hidden>
@@ -155,6 +156,16 @@
               <section id="security-settings" class="panel settings-card"><div class="settings-card-head"><div><p class="section-label">IDENTITY</p><h2>Sign-in and security</h2><p class="card-description">Authentication is not connected to this frontend.</p></div></div><div class="settings-detail"><div><strong>Password and sessions</strong><p>Managed by an identity provider when configured.</p></div><span class="small-tag muted-tag">Unavailable</span></div><div class="settings-detail settings-border"><div><strong>Sign-in screens</strong><p>View the current login and registration layouts.</p></div><a class="quiet-button" href="#login" data-auth="login">Open sign in <span aria-hidden="true">→</span></a></div></section>
               <section id="notifications-settings" class="panel settings-card"><div class="settings-card-head"><div><p class="section-label">LOCAL PREFERENCES</p><h2>Preferences</h2><p class="card-description">Saved in this browser only.</p></div></div><label class="preference-row"><span><strong>Budget threshold notice</strong><small>Show a local notice when the demo budget is nearly used.</small></span><input id="pref-budget-alerts" type="checkbox" checked></label><label class="preference-row"><span><strong>Product updates</strong><small>Store this preference locally.</small></span><input id="pref-product-updates" type="checkbox"></label><div class="form-actions"><span id="preferences-save-note" class="form-save-note">Preferences save automatically.</span></div></section>
             </div>
+          </div>
+        </section>
+        <section id="page-admin" class="page-view" aria-labelledby="admin-title" hidden>
+          <div class="page-heading"><div><p class="eyebrow">AEGIS <span class="eyebrow-divider">/</span> CONTROL PLANE</p><h1 id="admin-title">Administration</h1><p class="page-subtitle">Manage tenants, access, routing, quotas, pricing, provider health, and operational records.</p></div></div>
+          <div id="admin-console" class="admin-console">
+            <nav class="admin-tabs" aria-label="Administration areas" data-admin-tabs role="tablist">
+              <button class="admin-tab active" type="button" role="tab" aria-selected="true" data-admin-view="tenants">Tenants</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="members">Users</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="keys">API keys</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="routes">Routes</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="quotas">Budgets &amp; quotas</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="pricing">Pricing</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="providers">Providers</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="reconciliation">Reconciliation</button><button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-view="audit">Audit</button>
+            </nav>
+            <p class="admin-live-status" role="status" aria-live="polite" data-admin-status>Choose a control-plane area.</p>
+            <div class="admin-content" data-admin-content></div>
           </div>
         </section>
         <footer class="app-footer"><span>Aegis Gateway</span><span>Frontend preview</span><a href="#login" data-auth="login">Sign-in screens</a></footer>

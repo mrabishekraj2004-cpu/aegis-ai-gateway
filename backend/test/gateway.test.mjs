@@ -38,7 +38,9 @@ test("authenticated success returns route, request ID, usage and settled budget"
   const response = await request(gateway);
   assert.equal(response.status, 200);
   assert.match(response.body.id, /^req_local_/);
-  assert.deepEqual(response.body.route, { provider: "mock", model: "mock-chat-v1" });
+  assert.equal(response.body.route.provider, "mock");
+  assert.equal(response.body.route.model, "mock-chat-v1");
+  assert.equal(response.body.route.decision.reason, "priority_weighted");
   assert.equal(response.body.usage.prompt_tokens, 128);
   assert.equal(response.body.usage.completion_tokens, 42);
   assert.equal(response.body.usage.cost_uusd, 340_000);

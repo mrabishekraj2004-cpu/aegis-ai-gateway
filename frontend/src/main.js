@@ -1,5 +1,6 @@
 import { createHttpAdapter } from "./api.js";
 import { createSimulatedAdapter } from "./fixtures.js";
+import { attachAdmin } from "./admin.js";
 
 const $ = selector => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);
@@ -16,7 +17,7 @@ const getAccessToken = async () => {
   if (localDemoMode) return runtimeConfig.demoTokens?.[selectedTenant] ?? null;
   return typeof runtimeConfig.getAccessToken === "function"
     ? runtimeConfig.getAccessToken()
-    : runtimeConfig.accessToken || null;
+    : null;
 };
 const adapter = mode === "api"
   ? createHttpAdapter({ baseUrl: runtimeConfig.apiBaseUrl ?? "", getAccessToken, localDemoMode })
@@ -451,7 +452,7 @@ function navigatePage(page, { focus = true, updateHash = true } = {}) {
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
-  const pageNames = { overview: "Overview", requests: "Request lab", usage: "Usage & budgets", "api-keys": "API keys", team: "Team", settings: "Settings" };
+  const pageNames = { overview: "Overview", requests: "Request lab", usage: "Usage & budgets", "api-keys": "API keys", team: "Team", settings: "Settings", admin:"Administration" };
   $("#breadcrumb-current").textContent = pageNames[page] ?? "Overview";
   if (updateHash) history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${page}`);
   document.title = `${pageNames[page] ?? "Overview"} — Aegis Gateway`;
@@ -551,6 +552,7 @@ function attachSaasInteractions() {
 async function initialize() {
   renderDateGreeting();
   attachSaasInteractions();
+  attachAdmin({adapter,mode});
   renderMode();
   await populateTenants();
   $("#request-form").addEventListener("submit", handleSubmit);

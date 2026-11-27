@@ -43,7 +43,11 @@ test("Step 8 live adapter flow covers success, actual cap denial, provider failu
     model: "demo-model", prompt: "Summarize feedback", maxTokens: 128, tenantId: "spoofed-tenant", scenario: "success"
   });
   assert.equal(success.kind, "success");
-  assert.deepEqual(success.route, { provider: "mock", model: "mock-chat-v1" });
+  assert.equal(success.route.provider, "mock");
+  assert.equal(success.route.model, "mock-chat-v1");
+  assert.equal(success.route.alias, "demo-model");
+  assert.ok(success.route.config_version);
+  assert.equal(success.route.decision.reason, "priority_weighted");
   assert.equal(success.response.length > 0, true);
   assert.equal(success.usage.cost_uusd, 340_000);
   assert.equal(success.budget.settled_uusd, 340_000);

@@ -56,5 +56,7 @@ test("runtime config serves the API URL and exposes demo tokens only in explicit
   const ordinaryResponse = responseCapture();
   await ordinary.listeners("request")[0]({ url: "/runtime-config.js", method: "GET" }, ordinaryResponse);
   assert.match(String(ordinaryResponse.body), /"demoTokens":\{\}/);
-  assert.match(String(ordinaryResponse.body), /ordinary-local-token/);
+  assert.doesNotMatch(String(ordinaryResponse.body), /ordinary-local-token/);
+  assert.doesNotMatch(String(ordinaryResponse.body), /accessToken/);
+  assert.equal(ordinaryResponse.headers["Content-Security-Policy"]?.includes("connect-src"),true);
 });

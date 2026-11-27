@@ -35,6 +35,14 @@ export function createHttpAdapter({ baseUrl = "", getAccessToken, fetchImpl = fe
     catch { return {}; }
   }
 
+  async function adminRequest(path,{method="GET",body}={}) {
+    assertBase();
+    const response=await fetchImpl(`${base}${path}`,{method,headers:await headers({"Content-Type":"application/json"}),...(body===undefined?{}:{body:JSON.stringify(body)})});
+    const payload=await readJson(response);
+    if(!response.ok)throw new Error(payload?.error?.message??`Control-plane request failed (${response.status}).`);
+    return payload;
+  }
+
   return {
     mode: "api",
     async listTenants() { return []; },
@@ -64,7 +72,7 @@ export function createHttpAdapter({ baseUrl = "", getAccessToken, fetchImpl = fe
       const error = body?.error ?? {};
       if (response.status === 429 || error.code === "budget_exceeded") {
         const rawBudget = body.budget ?? error.budget;
-        return { kind: "denied", requestId: error.request_id ?? body.id ?? "", code: "budget_exceeded", quote_uusd: Number(error.quoted_uusd ?? error.quote_uusd ?? 0), remaining_uusd: Number(error.remaining_uusd ?? rawBudget?.remaining_uusd ?? 0), budget: rawBudget ? normalizeBudget(rawBudget) : null, providerCalled: false };
+        return { kind: "denied", requestId: error.request_id ?? body.id ?? "", code: error.code ?? "budget_exceeded", quote_uusd: Number(error.quoted_uusd ?? error.quote_uusd ?? 0), remaining_uusd: Number(error.remaining_uusd ?? rawBudget?.remaining_uusd ?? 0), budget: rawBudget ? normalizeBudget(rawBudget) : null, providerCalled: false, retryAfter: Number(response.headers.get("Retry-After") ?? 0) };
       }
       if (response.status === 502 || error.code === "provider_error") {
         const rawBudget = body.budget ?? error.budget;
@@ -77,7 +85,25 @@ export function createHttpAdapter({ baseUrl = "", getAccessToken, fetchImpl = fe
         usage: { request_id: body.id, model: body.model ?? model, route: body.route, input_tokens: body.usage?.prompt_tokens ?? 0, output_tokens: body.usage?.completion_tokens ?? 0, total_tokens: body.usage?.total_tokens ?? 0, cost_uusd: Number(body.usage?.cost_uusd ?? 0), status: "completed", created_at: new Date().toISOString() },
         budget: body.budget ? normalizeBudget(body.budget) : null, providerCalled: true
       };
-    }
+    },
+    listApiKeys:()=>adminRequest("/v1/admin/api-keys"),
+    createApiKey:body=>adminRequest("/v1/admin/api-keys",{method:"POST",body}),
+    revokeApiKey:(keyId,reason)=>adminRequest(`/v1/admin/api-keys/${encodeURIComponent(keyId)}`,{method:"DELETE",body:{reason}}),
+    rotateApiKey:(keyId,reason)=>adminRequest(`/v1/admin/api-keys/${encodeURIComponent(keyId)}/rotate`,{method:"POST",body:{reason}}),
+    listMembers:()=>adminRequest("/v1/admin/members"),
+    createMember:body=>adminRequest("/v1/admin/members",{method:"POST",body}),
+    listTenants:()=>adminRequest("/v1/admin/tenants"),
+    createTenant:body=>adminRequest("/v1/admin/tenants",{method:"POST",body}),
+    listRoutingConfigs:()=>adminRequest("/v1/admin/routing-configs"),
+    createRoutingDraft:body=>adminRequest("/v1/admin/routing-configs",{method:"POST",body}),
+    publishRoutingConfig:(version,reason)=>adminRequest(`/v1/admin/routing-configs/${encodeURIComponent(version)}/publish`,{method:"POST",body:{reason}}),
+    listQuotas:()=>adminRequest("/v1/admin/quotas"),
+    createQuota:body=>adminRequest("/v1/admin/quotas",{method:"POST",body}),
+    listPricing:()=>adminRequest("/v1/admin/pricing"),
+    createPricing:body=>adminRequest("/v1/admin/pricing",{method:"POST",body}),
+    listReconciliation:()=>adminRequest("/v1/admin/reconciliation"),
+    listAuditEvents:()=>adminRequest("/v1/admin/audit-events"),
+    getProviderHealth:()=>adminRequest("/v1/admin/provider-health")
   };
 }
 
