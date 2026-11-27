@@ -52,7 +52,7 @@ jobs:
           if [ "$test_status" -ne 0 ]; then
             exit "$test_status"
           fi
-          if ! grep -q 'ℹ skipped 0' <<< "$output"; then
+          if ! grep -q 'skipped 0' <<< "$output"; then
             echo 'PostgreSQL CI must complete with zero skipped tests.' >&2
             exit 1
           fi
