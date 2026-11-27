@@ -1,6 +1,7 @@
 import { gatewayMetrics } from "./observability.js";
 
 export class ReconciliationWorker {
+  /** @param {{store:import("./contracts.js").WorkerStore,providers?:Map<string,{reconcile?:(input:{providerRequestId?:string|null,requestId:string,reservationId:string,route?:import("./contracts.js").ProviderRoute|null})=>Promise<import("./contracts.js").ReconciliationResult|undefined>}>,maxAttempts?:number,batchSize?:number,staleAfterMs?:number}} options */
   constructor({ store, providers, maxAttempts = 8, batchSize = 20, staleAfterMs = 120_000 } = {}) {
     if (!store?.claimReconciliationJobs || !store?.retryReconciliation) throw new Error("ReconciliationWorker requires a durable store.");
     this.store = store;
@@ -21,9 +22,9 @@ export class ReconciliationWorker {
           continue;
         }
         const provider = this.providers.get(job.provider);
-        const outcome = await provider?.reconcile?.({ providerRequestId: job.provider_request_id, requestId: job.request_id, reservationId: job.reservation_id });
+        const outcome = await provider?.reconcile?.({ providerRequestId: job.provider_request_id, requestId: job.request_id, reservationId: job.reservation_id, route:job.provider_route });
         if (outcome?.kind === "usage") {
-          await this.store.settle({ reservationId: job.reservation_id, usage: outcome.usage });
+          await this.store.settle({ reservationId: job.reservation_id, usage: { ...outcome.usage, route:outcome.usage.route??job.provider_route, pricing_version:job.provider_route?.pricing_version, config_version:job.provider_route?.config_version } });
           results.push({ reservation_id: job.reservation_id, outcome: "settled" });
           continue;
         }

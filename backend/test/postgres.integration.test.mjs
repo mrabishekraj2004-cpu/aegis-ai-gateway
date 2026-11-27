@@ -6,6 +6,7 @@ import { PostgresLedger } from "../src/postgres-ledger.js";
 import { createGateway } from "../src/gateway.js";
 import { MockProvider } from "../src/mock-provider.js";
 import { ReconciliationWorker } from "../src/reconciliation-worker.js";
+import { OutboxWorker } from "../src/outbox-worker.js";
 
 const databaseUrl = process.env.AEGIS_TEST_DATABASE_URL;
 if (process.env.CI && !databaseUrl) throw new Error("CI requires AEGIS_TEST_DATABASE_URL; PostgreSQL integration checks may not be skipped.");
@@ -51,7 +52,7 @@ const settleUsage = {
 
 testPg("fresh PostgreSQL schema migrates and migration reruns are idempotent", async () => {
   await isolatedDatabase(async ({ poolA, migration }) => {
-    assert.deepEqual(migration.applied, ["001", "002", "003"]);
+    assert.deepEqual(migration.applied, ["001", "002", "003", "004"]);
     const rerun = await migrate(poolA);
     assert.deepEqual(rerun.applied, []);
     const tables = await poolA.query("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()");
@@ -185,10 +186,11 @@ testPg("crash recovery releases pre-provider reservations and settles confirmed 
     await store.seedTenant({id:"tenant_crash",name:"Crash Recovery",limit_uusd:1_000_000});
     const beforeProvider=await store.reserve({tenantId:"tenant_crash",requestId:"req_crash_reserved",quoteUusd:340_000});
     const afterProvider=await store.reserve({tenantId:"tenant_crash",requestId:"req_crash_success",quoteUusd:340_000});
-    await store.markProviderStarted({reservationId:afterProvider.reservation.reservation_id,provider:"mock",configVersion:"cfg-7",pricingVersion:"price-2"});
+    const route={provider:"mock",model:"mock-chat-v1",alias:"demo-model",region:"global",pricing_version:"price-2",config_version:"cfg-7",pricing:{input_usd_per_million:0.1,output_usd_per_million:0.2}};
+    await store.markProviderStarted({reservationId:afterProvider.reservation.reservation_id,provider:"mock",configVersion:"cfg-7",pricingVersion:"price-2",route});
     await store.markProviderRequest(afterProvider.reservation.reservation_id,"provider_receipt_synthetic");
     await poolA.query("UPDATE reconciliation_jobs SET next_attempt_at=now()-interval '1 second' WHERE reservation_id=ANY($1::text[])",[[beforeProvider.reservation.reservation_id,afterProvider.reservation.reservation_id]]);
-    const worker=new ReconciliationWorker({store,providers:new Map([["mock",{reconcile:async()=>({kind:"usage",usage:settleUsage})}]]),staleAfterMs:0});
+    const worker=new ReconciliationWorker({store,providers:new Map([["mock",{reconcile:async({route:storedRoute})=>{assert.deepEqual(storedRoute,route);return {kind:"usage",usage:{...settleUsage,route:storedRoute}};}}]]),staleAfterMs:0});
     const result=await worker.runOnce();
     assert.deepEqual(result.results.map(item=>item.outcome).sort(),["released_unstarted","settled"]);
     const duplicate=await worker.runOnce();
@@ -198,6 +200,25 @@ testPg("crash recovery releases pre-provider reservations and settles confirmed 
     assert.equal(overview.budget.settled_uusd,340_000);
     assert.equal(overview.budget.reserved_uusd,0);
     assert.equal(overview.entries[0].request_id,"req_crash_success");
+  });
+});
+
+testPg("outbox worker publishes ledger events idempotently to the integration event table", async () => {
+  await isolatedDatabase(async ({poolA})=>{
+    const store=new PostgresLedger({pool:poolA});
+    await store.seedTenant({id:"tenant_outbox",name:"Outbox Tenant",limit_uusd:500_000});
+    const reservation=await store.reserve({tenantId:"tenant_outbox",requestId:"req_outbox",quoteUusd:340_000});
+    await store.settle({reservationId:reservation.reservation.reservation_id,usage:settleUsage});
+    const worker=new OutboxWorker({store,publish:(payload,{idempotencyKey})=>store.publishIntegrationEvent({payload,idempotencyKey}),batchSize:20});
+    const first=await worker.runOnce();
+    assert.equal(first.claimed,3);
+    assert.equal(first.results.filter(result=>result.outcome==="published").length,3);
+    const events=await poolA.query("SELECT event_key,event_type FROM integration_events ORDER BY event_key");
+    assert.equal(events.rowCount,3);
+    const states=await poolA.query("SELECT state,count(*)::int AS count FROM billing_outbox GROUP BY state");
+    assert.deepEqual(states.rows,[{state:"published",count:3}]);
+    const second=await worker.runOnce();
+    assert.equal(second.claimed,0);
   });
 });
 

@@ -58,8 +58,6 @@ export function createGateway({ mode = "disabled", credentials, store, provider 
   const keyService = keyPepper && store.createApiKey ? new ApiKeyService({ store, pepper: keyPepper }) : null;
   const corsAllowedHeaders = ["Authorization", "Content-Type", "Idempotency-Key", ...(mode === "local" || mode === "test" ? ["X-Aegis-Mock-Scenario"] : [])].join(", ");
   const can = (principal, scope) => principal?.scopes?.includes("admin") || principal?.scopes?.includes(scope);
-  const admin = principal => ["owner", "admin"].includes(principal?.role) && can(principal, "control:write");
-
   async function handleRequest({ method = "GET", path = "/", headers = {}, body = null, signal } = {}) {
     const origin = header(headers, "origin");
     if (origin && origin !== allowedOrigin) return failure(403, "cors_origin_denied", "This origin is not allowed by the local gateway.");
@@ -186,7 +184,7 @@ export function createGateway({ mode = "disabled", credentials, store, provider 
             const started=Date.now();
             try {
               await writeSse(response,"planned_route",{request_id:requestId,model:route.alias,config_version:route.config_version},streamSignal);
-              for await (const event of policyRouter.stream(route,{prompt:normalized.prompt,messages:normalized.messages,maxTokens:normalized.maxTokens,requestId,reservationId,scenario,signal:streamSignal,failoverRoutes,beforeProviderStart:(candidate,attempt)=>store.markProviderStarted?.({reservationId,provider:candidate.provider,configVersion:candidate.config_version,pricingVersion:candidate.pricing_version,attempt})})) {
+              for await (const event of policyRouter.stream(route,{prompt:normalized.prompt,messages:normalized.messages,maxTokens:normalized.maxTokens,requestId,reservationId,scenario,signal:streamSignal,failoverRoutes,beforeProviderStart:(candidate,attempt)=>store.markProviderStarted?.({reservationId,provider:candidate.provider,configVersion:candidate.config_version,pricingVersion:candidate.pricing_version,route:candidate,attempt})})) {
                 if(event.selectedRoute&&event.selectedRoute.provider!==activeRoute.provider){activeRoute=event.selectedRoute;await writeSse(response,"route",{request_id:requestId,route:activeRoute},streamSignal);}
                 if (event.type==="meta" && event.provider_request_id) await store.markProviderRequest?.(reservationId,event.provider_request_id);
                 if (event.type==="delta") {
@@ -236,7 +234,7 @@ export function createGateway({ mode = "disabled", credentials, store, provider 
       }
       try {
         const providerStartedAt=Date.now();
-        const providerResult = await inSpan("aegis.provider.invoke",{provider:route.provider,model:route.model},()=>policyRouter.invoke(route,{prompt:normalized.prompt,messages:normalized.messages,maxTokens:normalized.maxTokens,requestId,reservationId,scenario,failoverRoutes,beforeProviderStart:(candidate,attempt)=>store.markProviderStarted?.({reservationId,provider:candidate.provider,configVersion:candidate.config_version,pricingVersion:candidate.pricing_version,attempt})}));
+        const providerResult = await inSpan("aegis.provider.invoke",{provider:route.provider,model:route.model},()=>policyRouter.invoke(route,{prompt:normalized.prompt,messages:normalized.messages,maxTokens:normalized.maxTokens,requestId,reservationId,scenario,signal,failoverRoutes,onProviderRequestId:providerRequestId=>store.markProviderRequest?.(reservationId,providerRequestId),beforeProviderStart:(candidate,attempt)=>store.markProviderStarted?.({reservationId,provider:candidate.provider,configVersion:candidate.config_version,pricingVersion:candidate.pricing_version,route:candidate,attempt})}));
         const activeRoute=providerResult.selectedRoute??route;
         gatewayMetrics.observe("aegis_provider_latency_ms",Date.now()-providerStartedAt,{provider:activeRoute.provider});
         if (providerResult.kind === "failure") {

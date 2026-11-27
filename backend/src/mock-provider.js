@@ -3,7 +3,10 @@ import { ProviderAdapter } from "./provider-interface.js";
 const pause = ms => ms > 0 ? new Promise(resolve => setTimeout(resolve, ms)) : Promise.resolve();
 
 export class MockProvider extends ProviderAdapter {
-  constructor({ delayMs = 0, reconcile = async () => ({ kind: "unknown", message: "The mock has no provider receipt for this request." }) } = {}) {
+  constructor({ delayMs = 0, reconcile = async ({ providerRequestId, requestId, route }) => {
+    if (!requestId || providerRequestId !== `mock:${requestId}`) return { kind: "unknown", message: "The mock has no receipt matching this request." };
+    return { kind: "usage", usage: { model: route?.alias ?? "demo-model", route, input_tokens:128, output_tokens:42, cost_uusd:340_000, status:"completed" } };
+  } } = {}) {
     super("mock");
     this.delayMs = delayMs;
     this.reconcileOutcome = reconcile;
@@ -21,15 +24,18 @@ export class MockProvider extends ProviderAdapter {
     return scenario === "budget_denial" ? 13_000_000 : 340_000;
   }
 
-  async invoke({ route, prompt, scenario = "success" }) {
+  async invoke({ route, scenario = "success", requestId, onProviderRequestId }) {
     this.calls += 1;
     await pause(this.delayMs);
     if (scenario === "provider_failure") {
       return { kind: "failure", message: "The deterministic mock failed before returning usage." };
     }
+    const providerRequestId=requestId?`mock:${requestId}`:null;
+    if(providerRequestId)await onProviderRequestId?.(providerRequestId);
     return {
       kind: "success",
       response: "The top themes are delivery experience and product reliability. Customers value the fast turnaround and want clearer status updates.",
+      provider_request_id:providerRequestId,
       usage: {
         model: "demo-model",
         route: { ...route },
@@ -41,10 +47,11 @@ export class MockProvider extends ProviderAdapter {
     };
   }
 
-  async *stream({ route, prompt, scenario = "success", signal }) {
+  async *stream({ route, scenario = "success", signal, requestId }) {
     this.calls += 1;
     await pause(this.delayMs);
     if (scenario === "provider_failure") throw Object.assign(new Error("The deterministic mock failed before returning usage."), { outcomeUnknown: true, retryable: false });
+    if(requestId)yield {type:"meta",provider_request_id:`mock:${requestId}`};
     const answer="The top themes are delivery experience and product reliability. Customers value the fast turnaround and want clearer status updates.";
     let output="";
     for (let offset=0;offset<answer.length;offset+=18) {

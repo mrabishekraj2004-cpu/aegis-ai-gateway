@@ -189,6 +189,16 @@ export class PostgresControlPlane {
     );
   }
 
+  async publishIntegrationEvent({ payload, idempotencyKey }) {
+    if (!idempotencyKey || !payload || typeof payload !== "object") throw new Error("An idempotency key and event payload are required.");
+    const result=await this.pool.query(
+      `INSERT INTO integration_events (event_key,event_type,payload)
+       VALUES ($1,$2,$3::jsonb) ON CONFLICT (event_key) DO NOTHING RETURNING event_key`,
+      [idempotencyKey,String(payload.type??"billing.event"),JSON.stringify(payload)]
+    );
+    return { published:result.rowCount===1,duplicate:result.rowCount===0,event_key:idempotencyKey };
+  }
+
   async listAuditEvents(tenantId, { limit = 100, beforeId = null } = {}) {
     const result = await this.pool.query(
       `SELECT audit_id,tenant_id,actor_id,action,reason,correlation_id,target_type,target_id,payload,created_at

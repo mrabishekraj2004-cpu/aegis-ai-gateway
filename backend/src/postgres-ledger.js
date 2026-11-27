@@ -292,14 +292,14 @@ export class PostgresLedger extends PostgresControlPlane {
     } finally { client.release(); }
   }
 
-  async markProviderStarted({ reservationId, provider, configVersion = null, pricingVersion = null, attempt = 1 }) {
+  async markProviderStarted({ reservationId, provider, configVersion = null, pricingVersion = null, route = null, attempt = 1 }) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
       const result = await client.query(
-        `UPDATE reservations SET state='provider_started',provider=$2,config_version=$3,pricing_version=$4,provider_attempts=GREATEST(provider_attempts,$5)
+        `UPDATE reservations SET state='provider_started',provider=$2,config_version=$3,pricing_version=$4,provider_route=COALESCE($5::jsonb,provider_route),provider_attempts=GREATEST(provider_attempts,$6)
          WHERE reservation_id=$1 AND state IN ('active','provider_started') RETURNING tenant_id,request_id,window_start`,
-        [reservationId,provider,configVersion,pricingVersion,attempt]
+        [reservationId,provider,configVersion,pricingVersion,route?JSON.stringify(route):null,attempt]
       );
       if (result.rows[0]) await this.#ledgerEvent(client, { tenantId:result.rows[0].tenant_id,requestId:result.rows[0].request_id,reservationId,windowStart:result.rows[0].window_start,type:"provider_started",idempotencyKey:"provider_started:"+reservationId+":"+attempt,payload:{provider,attempt} });
       await client.query("UPDATE reconciliation_jobs SET provider=$2 WHERE reservation_id=$1",[reservationId,provider]);
@@ -390,7 +390,6 @@ export class PostgresLedger extends PostgresControlPlane {
           usage.model, JSON.stringify(usage.route), usage.input_tokens, usage.output_tokens,
           usage.input_tokens + usage.output_tokens, usage.cost_uusd, usage.status ?? "completed"]
       );
-      const usageRow = inserted.rows[0];
       const quotaReservations = await client.query("SELECT * FROM quota_reservations WHERE reservation_id=$1 FOR UPDATE", [reservationId]);
       for (const quota of quotaReservations.rows) {
         await client.query(
@@ -453,7 +452,7 @@ export class PostgresLedger extends PostgresControlPlane {
   async claimReconciliationJobs({ limit = 20, staleAfterMs = 120_000 } = {}) {
     const result = await this.pool.query(
       `WITH due AS (
-         SELECT j.reservation_id,r.state AS reservation_state,r.request_id,r.quote_uusd FROM reconciliation_jobs j
+         SELECT j.reservation_id,r.state AS reservation_state,r.request_id,r.quote_uusd,r.provider_route FROM reconciliation_jobs j
          JOIN reservations r USING(reservation_id)
          WHERE j.state IN ('pending','retry','in_progress') AND j.next_attempt_at <= now()
            AND (j.state <> 'in_progress' OR j.locked_at < now() - ($2::bigint * interval '1 millisecond'))
@@ -463,7 +462,7 @@ export class PostgresLedger extends PostgresControlPlane {
        )
        UPDATE reconciliation_jobs j SET state='in_progress',attempts=j.attempts+1,locked_at=now()
        FROM due WHERE j.reservation_id=due.reservation_id
-       RETURNING j.reservation_id,j.tenant_id,j.provider,j.provider_request_id,j.attempts,j.created_at,due.reservation_state,due.request_id,due.quote_uusd`,
+       RETURNING j.reservation_id,j.tenant_id,j.provider,j.provider_request_id,j.attempts,j.created_at,due.reservation_state,due.request_id,due.quote_uusd,due.provider_route`,
       [limit,staleAfterMs]
     );
     return result.rows;
