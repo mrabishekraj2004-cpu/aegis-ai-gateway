@@ -44,9 +44,14 @@ jobs:
         working-directory: backend
         shell: bash
         run: |
-          set -o pipefail
+          set +e
           output="$(npm test 2>&1)"
+          test_status=$?
+          set -e
           printf '%s\n' "$output"
+          if [ "$test_status" -ne 0 ]; then
+            exit "$test_status"
+          fi
           if ! grep -q 'ℹ skipped 0' <<< "$output"; then
             echo 'PostgreSQL CI must complete with zero skipped tests.' >&2
             exit 1

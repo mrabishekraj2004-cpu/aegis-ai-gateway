@@ -51,12 +51,12 @@ const settleUsage = {
 
 testPg("fresh PostgreSQL schema migrates and migration reruns are idempotent", async () => {
   await isolatedDatabase(async ({ poolA, migration }) => {
-    assert.deepEqual(migration.applied, ["001", "002"]);
+    assert.deepEqual(migration.applied, ["001", "002", "003"]);
     const rerun = await migrate(poolA);
     assert.deepEqual(rerun.applied, []);
     const tables = await poolA.query("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()");
     const names = new Set(tables.rows.map(row => row.table_name));
-    for (const name of ["tenants", "budget_windows", "reservations", "usage_entries", "idempotency_records", "api_keys", "tenant_memberships", "ledger_events", "billing_outbox", "reconciliation_jobs", "aegis_schema_migrations"]) {
+    for (const name of ["tenants", "budget_windows", "reservations", "usage_entries", "idempotency_records", "api_keys", "tenant_memberships", "ledger_events", "billing_outbox", "reconciliation_jobs", "integration_events", "integration_event_deliveries", "aegis_schema_migrations"]) {
       assert.ok(names.has(name), `missing ${name}`);
     }
   });
