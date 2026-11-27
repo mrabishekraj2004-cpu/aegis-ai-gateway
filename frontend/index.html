@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f5f2">
+  <meta name="description" content="Aegis Gateway request, budget, and usage console.">
+  <title>Aegis Gateway</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/runtime-config.js"></script>
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <section id="auth-shell" class="auth-shell" aria-label="Aegis account access" hidden>
+    <header class="auth-topbar"><a class="brand auth-brand" href="#overview" data-page="overview"><span class="brand-mark" aria-hidden="true">A</span><span>Aegis</span></a><span>Workspace access</span></header>
+    <div class="auth-layout">
+      <aside class="auth-context">
+        <p class="eyebrow">AEGIS GATEWAY <span class="divider-dot">/</span> PREVIEW</p>
+        <h1>Workspace<br>sign in</h1>
+        <p class="auth-context-copy">Use a workspace account to review requests, routes, and spend.</p>
+        <div class="auth-flow" aria-label="Aegis request flow">
+          <div class="auth-flow-row"><span class="flow-number">01</span><span class="flow-node"></span><span>Request</span></div>
+          <div class="auth-flow-row"><span class="flow-number">02</span><span class="flow-node"></span><span>Budget decision</span></div>
+          <div class="auth-flow-row"><span class="flow-number">03</span><span class="flow-node"></span><span>Usage record</span></div>
+        </div>
+        <p class="auth-context-foot">Synthetic preview data. No provider is contacted.</p>
+      </aside>
+      <div class="auth-panel-wrap">
+        <div class="auth-panel">
+          <p class="eyebrow" id="auth-eyebrow">ACCOUNT</p>
+          <h2 id="auth-title">Sign in</h2>
+          <p id="auth-copy" class="auth-copy">Continue to your Aegis workspace.</p>
+          <div id="auth-notice" class="auth-notice" role="status" aria-live="polite" hidden></div>
+          <form id="auth-form" novalidate>
+            <div id="auth-name-field" class="field" hidden><label class="field-label" for="auth-name">Name</label><input class="control" id="auth-name" name="name" autocomplete="name" placeholder="Your name"></div>
+            <div class="field"><label class="field-label" for="auth-email">Work email</label><input class="control" id="auth-email" name="email" type="email" autocomplete="email" placeholder="name@company.com" required></div>
+            <div id="auth-password-field" class="field"><div class="field-label-row"><label class="field-label" for="auth-password">Password</label><a id="forgot-link" href="#forgot-password" data-auth="forgot-password">Forgot password?</a></div><input class="control" id="auth-password" name="password" type="password" autocomplete="current-password" required></div>
+            <label id="auth-terms" class="check-row" hidden><input id="auth-terms-checkbox" type="checkbox"><span>I agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</span></label>
+            <button id="auth-submit" class="button button-primary button-wide" type="submit">Sign in</button>
+          </form>
+          <p class="auth-switch"><span id="auth-switch-copy">Need an account?</span> <a id="auth-switch-link" href="#register" data-auth="register">Create one</a></p>
+          <div class="auth-rule"><span>OR</span></div>
+          <button class="button button-secondary button-wide" type="button" data-page="overview">Open the demo workspace</button>
+          <p class="auth-demo-note">Account creation and password reset are not connected in this preview.</p>
+        </div>
+        <footer class="auth-footer"><span>Aegis Gateway</span><span>Preview environment</span></footer>
+      </div>
+    </div>
+  </section>
+
+  <div id="app-shell" class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#overview" data-page="overview"><span class="brand-mark" aria-hidden="true">A</span><span>Aegis</span></a>
+      <button class="workspace-switcher" type="button" aria-label="Current workspace: Aster Labs"><span class="workspace-avatar">A</span><span class="workspace-meta"><strong id="workspace-name">Aster Labs</strong><small>Workspace</small></span><span class="switch-caret" aria-hidden="true">⌄</span></button>
+      <div class="sidebar-rule"></div>
+      <p class="nav-label">Workspace</p>
+      <nav class="nav-list" aria-label="Workspace">
+        <a class="nav-link active" href="#overview" data-page="overview" aria-current="page"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg><span>Overview</span></a>
+        <a class="nav-link" href="#requests" data-page="requests"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15 15 4M6 4h9v9"/></svg><span>Request lab</span></a>
+        <a class="nav-link" href="#usage" data-page="usage"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v7l4 2M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/></svg><span>Usage</span></a>
+      </nav>
+      <p class="nav-label nav-label-spaced">Workspace settings</p>
+      <nav class="nav-list" aria-label="Workspace settings">
+        <a class="nav-link" href="#api-keys" data-page="api-keys"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="10" r="3"/><path d="m10 10 6 0m-2 0v2m-2-2v2"/></svg><span>API keys</span></a>
+        <a class="nav-link" href="#team" data-page="team"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="7" r="3"/><path d="M3 17c.4-2.5 2.1-4 5-4s4.6 1.5 5 4m1-11a3 3 0 0 1 0 6m1 1c1.1.7 1.8 2 2 4"/></svg><span>Team</span></a>
+        <a class="nav-link" href="#settings" data-page="settings"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3"/><path d="M10 2v2m0 12v2m8-8h-2M4 10H2m13.7-5.7-1.4 1.4M5.7 14.3l-1.4 1.4m11.4 0-1.4-1.4M5.7 5.7 4.3 4.3"/></svg><span>Settings</span></a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="environment-card"><span class="environment-indicator"></span><div><strong id="mode-label">Synthetic preview</strong><p id="mode-description">No provider calls are made.</p></div></div>
+        <button id="profile-menu" class="profile-menu" type="button" data-page="settings" aria-label="Open profile settings"><span id="profile-avatar" class="profile-avatar">AO</span><span class="profile-meta"><strong id="profile-display-name">Aegis Operator</strong><small id="profile-display-email">operator@asterlabs.test</small></span><span class="profile-more" aria-hidden="true">···</span></button>
+      </div>
+    </aside>
+
+    <div class="main-shell">
+      <header class="topbar">
+        <div class="breadcrumbs"><span id="breadcrumb-workspace">Aster Labs</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Overview</strong></div>
+        <div class="topbar-actions">
+          <span id="mode-badge" class="mode-badge"><span class="mode-dot"></span> Fixture mode</span>
+          <span id="storage-badge" class="storage-badge" hidden></span>
+          <div id="tenant-control" class="tenant-control" hidden><label for="tenant-select">Demo tenant</label><select id="tenant-select" aria-label="Demo tenant"></select></div>
+          <span id="api-tenant" class="api-tenant" hidden></span>
+          <button class="help-button" type="button" aria-label="Help">Help</button>
+        </div>
+      </header>
+
+      <main id="main" class="content">
+        <div id="page-alert" class="page-alert" role="alert" hidden></div>
+        <section id="page-overview" class="page-view" aria-labelledby="overview-title">
+          <div class="page-heading"><div><p class="eyebrow"><span id="date-label">NOVEMBER 27, 2026</span><span class="eyebrow-divider">/</span> <span id="workspace-name-heading">ASTER LABS</span></p><h1 id="overview-title">Overview</h1><p class="page-subtitle">Spend and request activity for this workspace.</p></div><div class="heading-actions"><span id="period-label" class="period-pill">Nov 1 – Nov 30, 2026 UTC</span><button class="button button-primary" type="button" data-page="requests">New request <span aria-hidden="true">↗</span></button></div></div>
+          <div class="overview-layout">
+            <div class="overview-main">
+              <section class="panel budget-panel" aria-labelledby="budget-title">
+                <div class="budget-panel-top"><div><p class="section-label">MONTHLY BUDGET</p><h2 id="budget-title">Available to use</h2></div><button class="quiet-button" type="button" data-page="usage">Usage details <span aria-hidden="true">→</span></button></div>
+                <div class="budget-number-row"><strong id="available-amount" class="budget-amount">$12.58</strong><span class="budget-of">of <strong id="limit-label">$20.00</strong></span></div>
+                <div class="progress-wrap"><div class="progress-label"><span id="committed-label">$7.42 used</span><span id="budget-percent">37.1%</span></div><div id="budget-progress" class="progress-track" role="progressbar" aria-label="Budget used" aria-valuemin="0" aria-valuemax="20000000" aria-valuenow="7420000"><span id="progress-fill" class="progress-fill" style="width:37.1%"></span></div></div>
+                <div class="budget-meta"><div><span class="meta-dot settled-dot"></span><span>Settled</span><strong id="settled-amount">$7.42</strong></div><div><span class="meta-dot reserved-dot"></span><span>Reserved</span><strong id="reserved-amount">$0.00</strong></div><div class="budget-reset">Resets <strong id="reset-date">Dec 1, 2026 UTC</strong></div></div>
+                <button id="reset-button" class="text-button" type="button" hidden>Reset demo data</button>
+              </section>
+
+              <section class="panel activity-panel" aria-labelledby="activity-title"><div class="section-heading"><div><p class="section-label">REQUESTS</p><h2 id="activity-title">Recent activity</h2></div><button class="quiet-button" type="button" data-page="usage">View usage <span aria-hidden="true">→</span></button></div><div id="overview-activity" class="activity-list"></div></section>
+            </div>
+            <aside class="overview-side">
+              <section class="panel route-panel" aria-labelledby="route-title"><div class="section-heading"><div><p class="section-label">ROUTING</p><h2 id="route-title">Default route</h2></div><span class="state-badge"><span class="state-dot"></span> Active</span></div><div class="route-alias"><span class="route-mark">A</span><div><small>ALIAS</small><strong>demo-model</strong></div></div><div class="route-connector" aria-hidden="true"></div><div class="route-target"><span class="target-mark">M</span><div><small>PROVIDER / MODEL</small><strong>mock-chat-v1</strong></div></div><p class="route-note">Deterministic mock provider. No paid model calls.</p></section>
+              <section class="panel next-panel"><p class="section-label">REQUEST LAB</p><h2>Test a request against the current budget.</h2><p>Admission is checked before the provider is called.</p><button class="button button-secondary" type="button" data-page="requests">Open request lab <span aria-hidden="true">→</span></button></section>
+            </aside>
+          </div>
+          <div class="dashboard-footnote"><span class="footnote-indicator" aria-hidden="true"></span><span>Demo workspace · data is synthetic</span><button id="fixture-mode-link" class="mode-switch" type="button" data-mode="simulated">Fixture mode</button><button id="api-mode-link" class="mode-switch" type="button" data-mode="api">Gateway API</button></div>
+        </section>
+
+        <section id="page-requests" class="page-view" aria-labelledby="request-page-title" hidden>
+          <div class="page-heading"><div><p class="eyebrow">WORKSPACE <span class="eyebrow-divider">/</span> REQUESTS</p><h1 id="request-page-title">Request lab</h1><p class="page-subtitle">Run a request and inspect the budget decision and response.</p></div><span class="page-status"><span class="state-dot"></span> Ready</span></div>
+          <div class="request-layout"><div class="request-main column">
+            <section id="request" class="panel request-card" aria-labelledby="request-title"><div class="card-header"><div><p class="section-label">COMPOSE</p><h2 id="request-title">New request</h2></div><span class="endpoint-tag"><span class="method-tag">POST</span> /v1/chat/completions</span></div>
+              <form id="request-form">
+                <div class="field"><label for="model" class="field-label">Model alias <span class="field-hint">Resolved by the gateway</span></label><select id="model" name="model" class="control"><option value="demo-model">demo-model</option></select></div>
+                <div class="field"><label for="prompt" class="field-label">Prompt</label><textarea id="prompt" name="prompt" class="control" required>Summarize the latest customer feedback and list the top two themes.</textarea></div>
+                <div class="field"><label for="max-tokens" class="field-label">Maximum output tokens</label><select id="max-tokens" name="maxTokens" class="control"><option value="128">128</option><option value="256">256</option><option value="512">512</option></select></div>
+                <fieldset id="scenario-fieldset" class="scenario-fieldset" hidden><legend>Demo scenario</legend><div class="scenario-options">
+                  <label class="scenario-option"><input type="radio" name="scenario" value="success" checked><span><strong>Success</strong><small>Mock cost: $0.34</small></span></label>
+                  <label class="scenario-option"><input type="radio" name="scenario" value="denied"><span><strong>Budget denial</strong><small>Quote: $13.00</small></span></label>
+                  <label class="scenario-option"><input type="radio" name="scenario" value="failure"><span><strong>Provider failure</strong><small>$0.34 remains reserved</small></span></label>
+                </div></fieldset>
+                <div class="form-footer"><p id="provider-note" class="provider-note">Mock route only. No external model call.</p><button id="submit-button" class="button button-primary" type="submit"><span>Run request</span><span aria-hidden="true">↗</span></button></div>
+              </form>
+            </section>
+            <section id="latest-request" class="panel outcome-card" aria-labelledby="outcome-title" aria-busy="false"><div class="card-header"><div><p class="section-label">RESULT</p><h2 id="outcome-title">Latest request</h2></div><span id="outcome-tag" class="small-tag">Ready</span></div><div id="outcome"><div class="empty-state"><h3>No request yet</h3><p>Run a request to see its route, response, and accounting status.</p></div></div></section>
+          </div><aside class="panel request-note"><p class="section-label">ADMISSION ORDER</p><h2>Budget is checked first.</h2><ol><li><span>1</span><div><strong>Quote</strong><p>Estimate the request cost.</p></div></li><li><span>2</span><div><strong>Admit</strong><p>Reserve budget before provider invocation.</p></div></li><li><span>3</span><div><strong>Settle</strong><p>Record confirmed usage in the ledger.</p></div></li></ol><p class="request-note-foot">If provider usage is uncertain, the reservation stays pending reconciliation.</p></aside></div>
+        </section>
+
+        <section id="page-usage" class="page-view" aria-labelledby="usage-page-title" hidden>
+          <div class="page-heading"><div><p class="eyebrow">WORKSPACE <span class="eyebrow-divider">/</span> LEDGER</p><h1 id="usage-page-title">Usage</h1><p class="page-subtitle">Settled requests for the current budget period.</p></div><span id="usage-window" class="period-pill">Current budget period</span></div>
+          <div class="usage-summary"><div><span>Settled</span><strong id="usage-settled">$7.42</strong></div><div><span>Reserved</span><strong id="usage-reserved">$0.00</strong></div><div><span>Available</span><strong id="usage-available">$12.58</strong></div><div><span>Billable requests</span><strong id="usage-count">3</strong></div></div>
+          <section id="usage" class="panel history-card" aria-labelledby="usage-title"><div class="history-header"><div><p class="section-label">BILLABLE ACTIVITY</p><h2 id="usage-title">Request ledger</h2><p id="history-subtitle" class="card-description">Each row is tied to a completed request.</p></div><span class="small-tag">This period</span></div><div id="usage-table"></div><p class="history-footnote">Denied requests and unresolved provider usage do not appear as settled usage.</p></section>
+        </section>
+
+        <section id="page-api-keys" class="page-view" aria-labelledby="keys-title" hidden>
+          <div class="page-heading"><div><p class="eyebrow">WORKSPACE SETTINGS <span class="eyebrow-divider">/</span> CREDENTIALS</p><h1 id="keys-title">API keys</h1><p class="page-subtitle">Credentials for services that call the gateway.</p></div></div>
+          <section class="panel configuration-state"><div class="configuration-icon" aria-hidden="true">K</div><div><p class="section-label">NOT CONNECTED</p><h2>Key management is not available in this preview.</h2><p>The current backend accepts configured bearer credentials. It does not create, rotate, or revoke keys from this screen.</p><button class="quiet-button" type="button" data-page="settings">View workspace settings <span aria-hidden="true">→</span></button></div></section>
+          <p class="security-note">Never put a production API key in browser code. Create and store credentials on a trusted server.</p>
+        </section>
+
+        <section id="page-team" class="page-view" aria-labelledby="team-title" hidden>
+          <div class="page-heading"><div><p class="eyebrow">WORKSPACE SETTINGS <span class="eyebrow-divider">/</span> ACCESS</p><h1 id="team-title">Team</h1><p class="page-subtitle">Workspace membership and roles.</p></div></div>
+          <section class="panel configuration-state"><div class="configuration-icon" aria-hidden="true">T</div><div><p class="section-label">NOT CONNECTED</p><h2>Team access is not configured.</h2><p>This gateway resolves tenant identity from bearer credentials. It does not yet support user accounts, invitations, or workspace roles.</p><button class="quiet-button" type="button" data-page="settings">View profile settings <span aria-hidden="true">→</span></button></div></section>
+        </section>
+
+        <section id="page-settings" class="page-view" aria-labelledby="settings-title" hidden>
+          <div class="page-heading"><div><p class="eyebrow">WORKSPACE <span class="eyebrow-divider">/</span> SETTINGS</p><h1 id="settings-title">Settings</h1><p class="page-subtitle">Profile details and preview preferences.</p></div><span class="page-status"><span class="status-dot status-demo"></span> Browser preview</span></div>
+          <div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections"><a class="settings-nav-link active" href="#profile-settings" data-settings-tab="profile">Profile</a><a class="settings-nav-link" href="#workspace-settings" data-settings-tab="workspace">Workspace</a><a class="settings-nav-link" href="#security-settings" data-settings-tab="security">Security</a><a class="settings-nav-link" href="#notifications-settings" data-settings-tab="notifications">Preferences</a></nav>
+            <div class="settings-content">
+              <section id="profile-settings" class="panel settings-card" aria-labelledby="profile-heading"><div class="settings-card-head"><div><p class="section-label">PERSONAL DETAILS</p><h2 id="profile-heading">Profile</h2><p class="card-description">These details are saved in this browser only.</p></div></div><div class="profile-edit"><span id="settings-avatar" class="profile-avatar profile-avatar-large">AO</span><div><strong>Profile initials</strong><p>Based on your name.</p></div></div><form id="profile-form" class="settings-form"><div class="form-pair"><div class="field"><label class="field-label" for="profile-name">Name</label><input class="control" id="profile-name" name="name" autocomplete="name" value="Aegis Operator" required></div><div class="field"><label class="field-label" for="profile-email">Email address</label><input class="control" id="profile-email" name="email" type="email" autocomplete="email" value="operator@asterlabs.test" required></div></div><div class="field"><label class="field-label" for="profile-role">Access</label><input class="control readonly-control" id="profile-role" value="Preview operator" readonly></div><div class="form-actions"><span id="profile-save-note" class="form-save-note">No account service is connected.</span><button id="save-profile-button" class="button button-primary button-small" type="submit">Save profile</button></div></form></section>
+              <section id="workspace-settings" class="panel settings-card"><div class="settings-card-head"><div><p class="section-label">WORKSPACE</p><h2>Budget configuration</h2></div></div><div class="settings-detail"><span class="workspace-avatar settings-workspace-avatar">A</span><div><strong id="settings-workspace-name">Aster Labs</strong><p>Tenant budget and request history.</p></div></div><div class="settings-detail settings-border"><span class="detail-label">Monthly cap</span><strong id="settings-budget-cap">$20.00 / month</strong><button class="quiet-button" type="button" data-page="usage">View usage <span aria-hidden="true">→</span></button></div></section>
+              <section id="security-settings" class="panel settings-card"><div class="settings-card-head"><div><p class="section-label">IDENTITY</p><h2>Sign-in and security</h2><p class="card-description">Authentication is not connected to this frontend.</p></div></div><div class="settings-detail"><div><strong>Password and sessions</strong><p>Managed by an identity provider when configured.</p></div><span class="small-tag muted-tag">Unavailable</span></div><div class="settings-detail settings-border"><div><strong>Sign-in screens</strong><p>View the current login and registration layouts.</p></div><a class="quiet-button" href="#login" data-auth="login">Open sign in <span aria-hidden="true">→</span></a></div></section>
+              <section id="notifications-settings" class="panel settings-card"><div class="settings-card-head"><div><p class="section-label">LOCAL PREFERENCES</p><h2>Preferences</h2><p class="card-description">Saved in this browser only.</p></div></div><label class="preference-row"><span><strong>Budget threshold notice</strong><small>Show a local notice when the demo budget is nearly used.</small></span><input id="pref-budget-alerts" type="checkbox" checked></label><label class="preference-row"><span><strong>Product updates</strong><small>Store this preference locally.</small></span><input id="pref-product-updates" type="checkbox"></label><div class="form-actions"><span id="preferences-save-note" class="form-save-note">Preferences save automatically.</span></div></section>
+            </div>
+          </div>
+        </section>
+        <footer class="app-footer"><span>Aegis Gateway</span><span>Frontend preview</span><a href="#login" data-auth="login">Sign-in screens</a></footer>
+      </main>
+    </div>
+  </div>
+  <div id="live-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

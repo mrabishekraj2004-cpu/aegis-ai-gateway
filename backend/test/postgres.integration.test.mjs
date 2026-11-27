@@ -1,0 +1,178 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { migrate } from "../src/migrations.js";
+import { PostgresLedger } from "../src/postgres-ledger.js";
+import { createGateway } from "../src/gateway.js";
+import { MockProvider } from "../src/mock-provider.js";
+
+const databaseUrl = process.env.AEGIS_TEST_DATABASE_URL;
+const testPg = databaseUrl ? test : test.skip;
+const sampleBody = {
+  model: "demo-model",
+  messages: [{ role: "user", content: "PostgreSQL integration test" }],
+  max_tokens: 128
+};
+
+async function isolatedDatabase(work) {
+  const { Pool } = await import("pg");
+  const admin = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 3000 });
+  const schema = `aegis_test_${randomBytes(6).toString("hex")}`;
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  let poolA;
+  try {
+    const options = `-c search_path=${schema}`;
+    poolA = new Pool({ connectionString: databaseUrl, options, max: 2, connectionTimeoutMillis: 3000 });
+    const migration = await migrate(poolA);
+    await work({ Pool, admin, poolA, options, schema, migration, closePoolA: async () => {
+      if (poolA) {
+        const current = poolA;
+        poolA = null;
+        await current.end();
+      }
+    } });
+  } finally {
+    if (poolA) await poolA.end();
+    await admin.query(`DROP SCHEMA ${schema} CASCADE`);
+    await admin.end();
+  }
+}
+
+const settleUsage = {
+  model: "demo-model",
+  route: { provider: "mock", model: "mock-chat-v1" },
+  input_tokens: 128,
+  output_tokens: 42,
+  cost_uusd: 340_000,
+  status: "completed"
+};
+
+testPg("fresh PostgreSQL schema migrates and migration reruns are idempotent", async () => {
+  await isolatedDatabase(async ({ poolA, migration }) => {
+    assert.deepEqual(migration.applied, ["001"]);
+    const rerun = await migrate(poolA);
+    assert.deepEqual(rerun.applied, []);
+    const tables = await poolA.query("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()");
+    const names = new Set(tables.rows.map(row => row.table_name));
+    for (const name of ["tenants", "budget_windows", "reservations", "usage_entries", "idempotency_records", "aegis_schema_migrations"]) {
+      assert.ok(names.has(name), `missing ${name}`);
+    }
+  });
+});
+
+testPg("settled usage and budget survive closing and reopening independent pools", async () => {
+  await isolatedDatabase(async ({ Pool, poolA, options, closePoolA }) => {
+    const first = new PostgresLedger({ pool: poolA });
+    await first.seedTenant({ id: "tenant_restart", name: "Restart Tenant", limit_uusd: 500_000 });
+    const begun = await first.beginRequest({ tenantId: "tenant_restart", idempotencyKey: "restart-key", requestHash: "a".repeat(64) });
+    const admission = await first.reserve({ tenantId: "tenant_restart", requestId: begun.requestId, quoteUusd: 340_000 });
+    const settlement = await first.settle({ reservationId: admission.reservation.reservation_id, usage: settleUsage });
+    await first.completeRequest(begun.key, { status: 200, body: { id: begun.requestId, usage: { cost_uusd: settlement.entry.cost_uusd } } });
+    await closePoolA();
+    const restartedPool = new Pool({ connectionString: databaseUrl, options, max: 2, connectionTimeoutMillis: 3000 });
+    try {
+      const afterRestart = new PostgresLedger({ pool: restartedPool });
+      const overview = await afterRestart.getOverview("tenant_restart");
+      assert.equal(overview.budget.settled_uusd, 340_000);
+      assert.equal(overview.budget.reserved_uusd, 0);
+      assert.equal(overview.entries.length, 1);
+      assert.equal(overview.entries[0].request_id, begun.requestId);
+    } finally { await restartedPool.end(); }
+  });
+});
+
+testPg("authenticated tenant overview stays isolated in PostgreSQL", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store = new PostgresLedger({ pool: poolA });
+    await store.seedTenant({ id: "tenant_a", name: "Tenant A", limit_uusd: 500_000 });
+    await store.seedTenant({ id: "tenant_b", name: "Tenant B", limit_uusd: 900_000 });
+    const provider = new MockProvider();
+    const gateway = createGateway({
+      mode: "test",
+      credentials: new Map([["token-a", "tenant_a"], ["token-b", "tenant_b"]]),
+      store,
+      provider
+    });
+    const response = await gateway.handle({ method: "GET", path: "/v1/usage?tenant_id=tenant_b", headers: { authorization: "Bearer token-a", "x-tenant-id": "tenant_b" } });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.tenant.id, "tenant_a");
+    assert.equal(response.body.budget.limit_uusd, 500_000);
+    assert.equal(response.body.entries.length, 0);
+  });
+});
+
+testPg("exact-limit request succeeds; an over-budget request is denied before provider invocation", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store = new PostgresLedger({ pool: poolA });
+    await store.seedTenant({ id: "tenant_limit", name: "Exact Limit", limit_uusd: 340_000 });
+    const provider = new MockProvider();
+    const gateway = createGateway({ mode: "test", credentials: new Map([["token", "tenant_limit"]]), store, provider });
+    const accepted = await gateway.handle({ method: "POST", path: "/v1/chat/completions", headers: { authorization: "Bearer token", "idempotency-key": "exact" }, body: sampleBody });
+    assert.equal(accepted.status, 200);
+    assert.equal(accepted.body.budget.settled_uusd, 340_000);
+    assert.equal(accepted.body.budget.reserved_uusd, 0);
+    const before = await store.getOverview("tenant_limit");
+    const denied = await gateway.handle({ method: "POST", path: "/v1/chat/completions", headers: { authorization: "Bearer token", "idempotency-key": "over", "x-aegis-mock-scenario": "budget_denial" }, body: sampleBody });
+    const after = await store.getOverview("tenant_limit");
+    assert.equal(denied.status, 429);
+    assert.equal(denied.body.error.provider_called, false);
+    assert.equal(provider.calls, 1);
+    assert.deepEqual(after.budget, before.budget);
+    assert.deepEqual(after.entries, before.entries);
+  });
+});
+
+testPg("independent PostgreSQL connections cannot reserve beyond remaining budget", async () => {
+  await isolatedDatabase(async ({ Pool, poolA, options }) => {
+    const storeA = new PostgresLedger({ pool: poolA });
+    await storeA.seedTenant({ id: "tenant_race", name: "Concurrent Tenant", limit_uusd: 340_000 });
+    const poolB = new Pool({ connectionString: databaseUrl, options, max: 1, connectionTimeoutMillis: 3000 });
+    try {
+      const storeB = new PostgresLedger({ pool: poolB });
+      const [clientA, clientB] = await Promise.all([poolA.connect(), poolB.connect()]);
+      try {
+        const [pidA, pidB] = await Promise.all([clientA.query("SELECT pg_backend_pid() AS pid"), clientB.query("SELECT pg_backend_pid() AS pid")]);
+        assert.notEqual(pidA.rows[0].pid, pidB.rows[0].pid, "requests must use distinct PostgreSQL sessions");
+      } finally { clientA.release(); clientB.release(); }
+      const results = await Promise.all([
+        storeA.reserve({ tenantId: "tenant_race", requestId: "req_race_a", quoteUusd: 340_000 }),
+        storeB.reserve({ tenantId: "tenant_race", requestId: "req_race_b", quoteUusd: 340_000 })
+      ]);
+      assert.deepEqual(results.map(result => result.admitted).sort(), [false, true]);
+      const budget = await storeA.getBudget("tenant_race");
+      assert.ok(budget.settled_uusd + budget.reserved_uusd <= budget.limit_uusd);
+      assert.equal(budget.reserved_uusd, 340_000);
+    } finally { await poolB.end(); }
+  });
+});
+
+testPg("duplicate settlement charges once and writes one usage entry", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store = new PostgresLedger({ pool: poolA });
+    await store.seedTenant({ id: "tenant_settle", name: "Settlement Tenant", limit_uusd: 340_000 });
+    const reservation = await store.reserve({ tenantId: "tenant_settle", requestId: "req_settle_once", quoteUusd: 340_000 });
+    const first = await store.settle({ reservationId: reservation.reservation.reservation_id, usage: settleUsage });
+    const duplicate = await store.settle({ reservationId: reservation.reservation.reservation_id, usage: settleUsage });
+    assert.equal(first.duplicate, false);
+    assert.equal(duplicate.duplicate, true);
+    assert.equal(await store.getUsageCount("tenant_settle"), 1);
+    const budget = await store.getBudget("tenant_settle");
+    assert.equal(budget.settled_uusd, 340_000);
+    assert.equal(budget.reserved_uusd, 0);
+  });
+});
+
+testPg("provider failure persists a reconciliation reservation without usage", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store = new PostgresLedger({ pool: poolA });
+    await store.seedTenant({ id: "tenant_failure", name: "Failure Tenant", limit_uusd: 500_000 });
+    const provider = new MockProvider();
+    const gateway = createGateway({ mode: "test", credentials: new Map([["token", "tenant_failure"]]), store, provider });
+    const response = await gateway.handle({ method: "POST", path: "/v1/chat/completions", headers: { authorization: "Bearer token", "idempotency-key": "failure", "x-aegis-mock-scenario": "provider_failure" }, body: sampleBody });
+    assert.equal(response.status, 502);
+    assert.equal(response.body.error.settlement_state, "reconcile_required");
+    assert.equal((await store.getBudget("tenant_failure")).reserved_uusd, 340_000);
+    assert.equal(await store.getUsageCount("tenant_failure"), 0);
+    assert.equal(provider.calls, 1);
+  });
+});

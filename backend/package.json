@@ -1,0 +1,16 @@
+{
+  "name": "aegis-gateway-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "seed:local": "node scripts/seed-local.mjs",
+    "check": "node --check server.mjs && node --check src/auth.js && node --check src/ledger.js && node --check src/mock-provider.js && node --check src/gateway.js && node --check src/postgres-ledger.js && node --check src/storage.js && node --check src/migrations.js && node --check scripts/migrate.mjs && node --check scripts/seed-local.mjs && node --check test/postgres.integration.test.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
