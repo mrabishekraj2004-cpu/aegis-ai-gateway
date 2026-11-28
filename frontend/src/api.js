@@ -94,6 +94,7 @@ export function createHttpAdapter({ baseUrl = "", getAccessToken, fetchImpl = fe
     createMember:body=>adminRequest("/v1/admin/members",{method:"POST",body}),
     listTenants:()=>adminRequest("/v1/admin/tenants"),
     createTenant:body=>adminRequest("/v1/admin/tenants",{method:"POST",body}),
+    bootstrapTenantOwner:(tenantId,body)=>adminRequest(`/v1/admin/tenants/${encodeURIComponent(tenantId)}/members`,{method:"POST",body}),
     listRoutingConfigs:()=>adminRequest("/v1/admin/routing-configs"),
     createRoutingDraft:body=>adminRequest("/v1/admin/routing-configs",{method:"POST",body}),
     publishRoutingConfig:(version,reason)=>adminRequest(`/v1/admin/routing-configs/${encodeURIComponent(version)}/publish`,{method:"POST",body:{reason}}),

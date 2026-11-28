@@ -1,7 +1,7 @@
 # Feature completion audit
 
 **Updated:** 2026-11-27  
-**Source:** PR stack based on repository `main` at `3790b9eb482cf73d913aaf563cb21c97b99a073d`. PR #1 and PR #2 CI/Security passed; PR #3 CI/Security also passed after the frontend image fix. PR #4 CI and Security checks passed; backend checks and the fail-closed guard tests are green.  
+**Source:** PR stack based on repository `main` at `3790b9eb482cf73d913aaf563cb21c97b99a073d`. PR #1 and PR #2 CI/Security passed; PR #3 CI/Security also passed after the frontend image fix. PR #4 CI and Security checks passed; backend checks and the fail-closed guard tests are green. PR #5 adds tenant first-owner onboarding; CI is pending.  
 **Conclusion:** The high-impact work has meaningful implementation progress but is not all complete or production-ready. Provider limitations, live validation, and a hosted full-stack deployment remain open.
 
 ## Verified checks
@@ -13,6 +13,7 @@
 | PR #3 CI and Security workflows | Passed after removing unused npm tooling from the frontend runtime image. |
 | PR #4 CI | Passed in GitHub Actions: syntax, TypeScript, ESLint, backend tests (43 passed, 0 failed, 0 skipped), PostgreSQL integration included, and frontend tests (14 passed, 0 failed, 0 skipped). |
 | PR #4 Security workflow | Passed. |
+| PR #5 tenant first-owner bootstrap | Implemented with platform-admin authorization and atomic membership/audit writes; PostgreSQL CI pending. |
 | Backend syntax, TypeScript, ESLint | Passed in PR #4 GitHub Actions. |
 | Backend tests | PR #4 GitHub Actions: 43 passed, 0 failed, 0 skipped with PostgreSQL service; local snapshot still had 30 passed and 10 database skips before runner access was lost. |
 | Frontend syntax and tests | PR #4 GitHub Actions: 14 passed, 0 failed, 0 skipped. |
@@ -36,7 +37,7 @@ The latest local test polling was stopped by automatic approval review after the
 | 7. Load/crash/failure-injection results | **Guarded mock runner added; runtime results pending** | The mock runner verifies health reports only mock, preflights the full planned spend, limits the run to 20 requests and $6.80, and verifies request IDs, costs, and settled budget. No load benchmark or process-level failure matrix was run because Docker is unavailable. See docs/FAILURE_TEST_RESULTS.md. |
 | 8. Threat model, ADRs, SLOs, capacity, runbooks | **Documentation added; measurements pending** | PR #3 adds threat-to-mitigation mapping, six ADRs, initial SLOs and provisional capacity, and outage/stuck reservation/key/database runbooks. Targets and sizing are explicitly unmeasured. |
 | 9. README and end-to-end demo | **README rewritten; recording pending** | README explains scope, local stack, and limits; a 3-minute capture script is documented. The video is not recorded because the stack could not be started. |
-| 10. Focused PR workflow | **In progress** | PR #1 authorization/recovery, PR #2 CI/tooling, PR #3 deployment/observability/docs, and PR #4 guarded verification utilities are separate. Keep them open for focused review; do not merge until required checks and reviews pass. |
+| 10. Focused PR workflow | **In progress** | PR #1 authorization/recovery, PR #2 CI/tooling, PR #3 deployment/observability/docs, and PR #4 guarded verification utilities and PR #5 tenant onboarding are separate. Keep them open for focused review; do not merge until required checks and reviews pass. |
 
 ## Deployment handoff
 
