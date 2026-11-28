@@ -8,6 +8,7 @@ const adminRole = principal => ["owner","admin"].includes(principal?.role);
 /** @param {import("./contracts.js").TenantPrincipal} principal */
 const platformAdmin = principal => principal?.platformAdmin === true;
 const platformRoutes = new Set(["/v1/admin/tenants", "/v1/admin/pricing", "/v1/admin/provider-health"]);
+/** @param {string} path */
 const platformTenantMemberRoute = path => /^\/v1\/admin\/tenants\/[A-Za-z0-9_-]+\/members$/.test(path);
 
 /** @param {any} body */
