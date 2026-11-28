@@ -449,6 +449,104 @@ export class PostgresLedger extends PostgresControlPlane {
     finally { client.release(); }
   }
 
+
+  async resolveReconciliation({ reservationId, tenantId, actor, reason, evidenceRef, outcome, providerRequestId = null, usage = null, correlationId = randomUUID() }) {
+    const client=await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const locked=await client.query(
+        `SELECT r.*,j.state AS job_state,j.provider_request_id AS job_provider_request_id
+         FROM reservations r JOIN reconciliation_jobs j USING(reservation_id)
+         WHERE r.reservation_id=$1 AND r.tenant_id=$2
+         FOR UPDATE OF r,j`, [reservationId,tenantId]
+      );
+      const reservation=locked.rows[0];
+      if(!reservation){await client.query("COMMIT");return {kind:"not_found"};}
+      if(["settled","released"].includes(reservation.state) || ["settled","released"].includes(reservation.job_state)){
+        await client.query("COMMIT");
+        return {kind:"already_resolved",outcome:reservation.state==="settled"?"settled":"not_executed"};
+      }
+      if(reservation.job_state!=="dead_letter"){await client.query("COMMIT");return {kind:"not_dead_letter"};}
+      if(!["settled","not_executed"].includes(outcome))throw new Error("Manual reconciliation outcome is invalid.");
+      const savedReceipt=reservation.job_provider_request_id??reservation.provider_request_id;
+      if(outcome==="settled"){
+        if(!usage || !Number.isSafeInteger(usage.input_tokens) || usage.input_tokens<0 || !Number.isSafeInteger(usage.output_tokens) || usage.output_tokens<0 || !Number.isSafeInteger(usage.cost_uusd) || usage.cost_uusd<0)throw new Error("Verified usage must contain non-negative safe integers.");
+        if(providerRequestId && savedReceipt && providerRequestId!==savedReceipt){await client.query("COMMIT");return {kind:"receipt_mismatch"};}
+        if(!["provider_started","reconcile_required"].includes(reservation.state))throw new Error("A provider call must have started before usage can be settled.");
+        const route=json(reservation.provider_route);
+        if(!route || typeof route!=="object"){await client.query("COMMIT");return {kind:"provider_route_missing"};}
+        const quote=integer(reservation.quote_uusd);
+        if(usage.cost_uusd>quote){await client.query("COMMIT");return {kind:"cost_exceeds_reservation"};}
+        const receipt=providerRequestId??savedReceipt;
+        if(!receipt)throw new Error("A provider request ID is required when settling verified usage.");
+        await client.query("UPDATE reservations SET provider_request_id=$2 WHERE reservation_id=$1",[reservationId,receipt]);
+        await client.query("UPDATE reconciliation_jobs SET provider_request_id=$2 WHERE reservation_id=$1",[reservationId,receipt]);
+        const budget=await client.query(
+          `UPDATE budget_windows SET reserved_uusd=reserved_uusd-$3,settled_uusd=settled_uusd+$4
+           WHERE tenant_id=$1 AND window_start=$2 RETURNING tenant_id`,
+          [tenantId,reservation.window_start,quote,usage.cost_uusd]
+        );
+        if(budget.rowCount!==1)throw new Error("Budget window for the reservation is missing.");
+        const model=String(route.alias??route.model??"unknown");
+        const inserted=await client.query(
+          `INSERT INTO usage_entries
+           (reservation_id,request_id,tenant_id,window_start,model,route,input_tokens,output_tokens,total_tokens,cost_uusd,status)
+           VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11)
+           RETURNING request_id,tenant_id,window_start,model,route,input_tokens,output_tokens,total_tokens,cost_uusd,status,created_at`,
+          [reservationId,reservation.request_id,tenantId,reservation.window_start,model,JSON.stringify(route),usage.input_tokens,usage.output_tokens,usage.input_tokens+usage.output_tokens,usage.cost_uusd,usage.status??"completed"]
+        );
+        const quotaReservations=await client.query("SELECT * FROM quota_reservations WHERE reservation_id=$1 AND settled_at IS NULL AND released_at IS NULL FOR UPDATE",[reservationId]);
+        for(const quota of quotaReservations.rows){
+          await client.query(
+            `UPDATE quota_windows SET token_count=GREATEST(0,token_count-$3+$4),cost_uusd=GREATEST(0,cost_uusd-$5+$6),concurrency_count=GREATEST(0,concurrency_count-1)
+             WHERE quota_id=$1 AND window_start=$2`,
+            [quota.quota_id,quota.window_start,quota.quoted_tokens,usage.input_tokens+usage.output_tokens,quota.quote_uusd,usage.cost_uusd]
+          );
+          await client.query("UPDATE quota_reservations SET settled_at=now() WHERE reservation_id=$1 AND quota_id=$2",[reservationId,quota.quota_id]);
+        }
+        await this.#ledgerEvent(client,{tenantId,requestId:reservation.request_id,reservationId,windowStart:reservation.window_start,type:"usage_reported",tokens:usage.input_tokens+usage.output_tokens,pricingVersion:reservation.pricing_version,configVersion:reservation.config_version,idempotencyKey:"usage_reported:"+reservationId,payload:{provider_cost_uusd:usage.provider_cost_uusd??null,calculated_cost_uusd:usage.cost_uusd,status:usage.status??"completed",source:"manual_provider_evidence"}});
+        await this.#ledgerEvent(client,{tenantId,requestId:reservation.request_id,reservationId,windowStart:reservation.window_start,type:"settled",amount:usage.cost_uusd,reservedDelta:-quote,tokens:usage.input_tokens+usage.output_tokens,pricingVersion:reservation.pricing_version,configVersion:reservation.config_version,idempotencyKey:"settled:"+reservationId,payload:{cost_uusd:usage.cost_uusd,source:"manual_provider_evidence"}});
+        await client.query("UPDATE reservations SET state='settled',settled_at=now() WHERE reservation_id=$1",[reservationId]);
+        await client.query("UPDATE reconciliation_jobs SET state='settled',completed_at=now(),locked_at=NULL,last_error=NULL WHERE reservation_id=$1",[reservationId]);
+        await client.query("UPDATE reconciliation_dead_letters SET resolved_at=now(),resolved_by=$2 WHERE reservation_id=$1 AND tenant_id=$3 AND resolved_at IS NULL",[reservationId,actor,tenantId]);
+        await client.query(
+          `INSERT INTO audit_events(tenant_id,actor_id,action,reason,correlation_id,target_type,target_id,payload)
+           VALUES($1,$2,'reconciliation.settled',$3,$4,'reservation',$5,$6::jsonb)`,
+          [tenantId,actor,reason,correlationId,reservationId,JSON.stringify({evidence_ref:evidenceRef,provider_request_id:receipt,cost_uusd:usage.cost_uusd,input_tokens:usage.input_tokens,output_tokens:usage.output_tokens,pricing_version:reservation.pricing_version,config_version:reservation.config_version})]
+        );
+        await client.query("COMMIT");
+        return {kind:"resolved",outcome:"settled",entry:mapUsage(inserted.rows[0])};
+      }
+      const quote=integer(reservation.quote_uusd);
+      const released=await client.query(
+        `UPDATE budget_windows SET reserved_uusd=reserved_uusd-$3 WHERE tenant_id=$1 AND window_start=$2 RETURNING tenant_id`,
+        [tenantId,reservation.window_start,quote]
+      );
+      if(released.rowCount!==1)throw new Error("Budget window for the reservation is missing.");
+      const quotaReservations=await client.query("SELECT * FROM quota_reservations WHERE reservation_id=$1 AND settled_at IS NULL AND released_at IS NULL FOR UPDATE",[reservationId]);
+      for(const quota of quotaReservations.rows){
+        await client.query(
+          `UPDATE quota_windows SET token_count=GREATEST(0,token_count-$3),cost_uusd=GREATEST(0,cost_uusd-$4),concurrency_count=GREATEST(0,concurrency_count-1)
+           WHERE quota_id=$1 AND window_start=$2`,
+          [quota.quota_id,quota.window_start,quota.quoted_tokens,quota.quote_uusd]
+        );
+        await client.query("UPDATE quota_reservations SET released_at=now() WHERE reservation_id=$1 AND quota_id=$2",[reservationId,quota.quota_id]);
+      }
+      await this.#ledgerEvent(client,{tenantId,requestId:reservation.request_id,reservationId,windowStart:reservation.window_start,type:"released",reservedDelta:-quote,pricingVersion:reservation.pricing_version,configVersion:reservation.config_version,idempotencyKey:"released:"+reservationId,payload:{reason:"provider_confirmed_not_executed",source:"manual_provider_evidence"}});
+      await client.query("UPDATE reservations SET state='released',settled_at=now() WHERE reservation_id=$1",[reservationId]);
+      await client.query("UPDATE reconciliation_jobs SET state='released',completed_at=now(),locked_at=NULL,last_error=NULL WHERE reservation_id=$1",[reservationId]);
+      await client.query("UPDATE reconciliation_dead_letters SET resolved_at=now(),resolved_by=$2 WHERE reservation_id=$1 AND tenant_id=$3 AND resolved_at IS NULL",[reservationId,actor,tenantId]);
+      await client.query(
+        `INSERT INTO audit_events(tenant_id,actor_id,action,reason,correlation_id,target_type,target_id,payload)
+         VALUES($1,$2,'reconciliation.released',$3,$4,'reservation',$5,$6::jsonb)`,
+        [tenantId,actor,reason,correlationId,reservationId,JSON.stringify({evidence_ref:evidenceRef,provider_request_id:savedReceipt,quote_uusd:quote,pricing_version:reservation.pricing_version,config_version:reservation.config_version})]
+      );
+      await client.query("COMMIT");
+      return {kind:"resolved",outcome:"not_executed",entry:null};
+    } catch(error){await client.query("ROLLBACK").catch(()=>{});throw error;}
+    finally{client.release();}
+  }
+
   async claimReconciliationJobs({ limit = 20, staleAfterMs = 120_000 } = {}) {
     const result = await this.pool.query(
       `WITH due AS (

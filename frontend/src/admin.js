@@ -3,6 +3,11 @@ const views=["tenants","members","keys","routes","quotas","pricing","providers",
 const titles={tenants:"Tenants",members:"Users & access",keys:"API keys",routes:"Routes & policies",quotas:"Budgets & quotas",pricing:"Pricing versions",providers:"Provider health",reconciliation:"Reconciliation",audit:"Audit events"};
 const endpoint={tenants:"listTenants",members:"listMembers",keys:"listApiKeys",routes:"listRoutingConfigs",quotas:"listQuotas",pricing:"listPricing",providers:"getProviderHealth",reconciliation:"listReconciliation",audit:"listAuditEvents"};
 
+function reconciliationCard(row){
+  const reservationId=escapeHtml(row.reservation_id);
+  return `<article class="panel admin-record"><div><p class="section-label">DEAD LETTER · ${escapeHtml(row.attempts)} ATTEMPTS</p><h3>Reservation ${reservationId}</h3><p>${escapeHtml(row.reason)}</p><p class="quiet-copy">Resolve only after checking authoritative provider records. Add a safe evidence reference; do not paste prompts, credentials, or provider response content.</p></div><form class="admin-form" data-reconcile-resolution data-reservation-id="${reservationId}"><div class="admin-form-grid"><label>Outcome<select class="control" name="outcome" data-reconcile-outcome><option value="settled">Provider usage is confirmed</option><option value="not_executed">Provider confirms no execution</option></select></label><label>Evidence reference<input class="control" name="evidence_ref" pattern="[A-Za-z0-9][A-Za-z0-9._:/#-]{2,499}" maxlength="500" required aria-describedby="evidence-guidance"></label><label class="form-span">Reason<textarea class="control" name="reason" minlength="3" maxlength="500" rows="2" required></textarea></label></div><p id="evidence-guidance" class="field-help">Use a provider receipt or console record ID. Avoid URLs with query strings and never include secrets.</p><div data-reconcile-usage><h4>Verified usage</h4><div class="admin-form-grid"><label>Provider request ID<input class="control" name="provider_request_id" maxlength="256" required></label><label>Input tokens<input class="control" name="input_tokens" type="number" min="0" step="1" required></label><label>Output tokens<input class="control" name="output_tokens" type="number" min="0" step="1" required></label><label>Calculated cost (uUSD)<input class="control" name="cost_uusd" type="number" min="0" step="1" required></label><label>Provider reported cost (uUSD, optional)<input class="control" name="provider_cost_uusd" type="number" min="0" step="1"></label><label>Usage status<select class="control" name="status"><option value="completed">Completed</option><option value="partial">Partial</option></select></label></div></div><button class="button button-primary button-small" type="submit">Record resolution</button></form></article>`;
+}
+
 function rowsHtml(rows,columns){
   if(!rows?.length)return '<p class="empty-state">Nothing to show yet.</p>';
   return `<div class="table-scroll"><table class="data-table"><thead><tr>${columns.map(([label])=>`<th scope="col">${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(([,key])=>`<td>${escapeHtml(typeof key==="function"?key(row):row[key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
@@ -41,8 +46,30 @@ export function attachAdmin({adapter,mode}){
     else if(view==="quotas")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="quota"><h3>Add tenant, user, or key quota</h3><div class="admin-form-grid"><label>Period<select class="control" name="period"><option>day</option><option>month</option></select></label><label>User ID (optional)<input class="control" name="principal_id"></label><label>API key ID (optional)<input class="control" name="api_key_id"></label><label>Request limit<input class="control" name="request_limit" type="number" min="0"></label><label>Token limit<input class="control" name="token_limit" type="number" min="0"></label><label>Cost limit (uUSD)<input class="control" name="cost_limit_uusd" type="number" min="0"></label><label>Concurrency limit<input class="control" name="concurrency_limit" type="number" min="0"></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-primary button-small">Create quota</button></form>`+rowsHtml(data.policies,[ ["ID","quota_id"],["Period","period"],["User","principal_id"],["API key","api_key_id"],["Requests","request_limit"],["Tokens","token_limit"],["Cost (uUSD)","cost_limit_uusd"],["Concurrency","concurrency_limit"],["Active",r=>r.active?"Yes":"No"] ]);
     else if(view==="pricing")content.innerHTML=head+`<form class="panel admin-form" data-admin-form="pricing"><h3>Publish a pricing version</h3><div class="admin-form-grid"><label>Provider<input class="control" name="provider" required></label><label>Model<input class="control" name="model" required></label><label>Region<input class="control" name="region" value="global" required></label><label>Unit<select class="control" name="unit"><option>token</option><option>request</option><option>image</option><option>second</option></select></label><label>Input USD / million<input class="control" name="input_usd_per_million" type="number" min="0" step="0.000001" value="0"></label><label>Output USD / million<input class="control" name="output_usd_per_million" type="number" min="0" step="0.000001" value="0"></label><label>Version<input class="control" name="version" required></label><label>Effective at<input class="control" name="effective_at" type="datetime-local" required></label><label>Reason<input class="control" name="reason" required></label></div><button class="button button-primary button-small">Publish pricing</button></form>`+rowsHtml(data.versions,[ ["Provider","provider"],["Model","model"],["Region","region"],["Unit","unit"],["Input USD/M","input_usd_per_million"],["Output USD/M","output_usd_per_million"],["Version","version"],["Effective","effective_at"] ]);
     else if(view==="providers")content.innerHTML=head+rowsHtml(data.providers,[ ["Provider","name"],["Status","status"] ]);
-    else if(view==="reconciliation")content.innerHTML=head+`<h3>Open cases</h3>`+rowsHtml(data.jobs,[ ["Request","request_id"],["Provider","provider"],["Provider request","provider_request_id"],["State","state"],["Attempts","attempts"],["Reserved (uUSD)","quote_uusd"],["Last error","last_error"] ])+`<h3>Dead letters</h3>`+rowsHtml(data.dead_letters,[ ["Request","reservation_id"],["Reason","reason"],["Attempts","attempts"],["Created","created_at"] ]);
+    else if(view==="reconciliation"){
+      const unresolved=(data.dead_letters??[]).filter(row=>!row.resolved_at);
+      const resolved=(data.dead_letters??[]).filter(row=>row.resolved_at);
+      content.innerHTML=head+`<h3>Open cases</h3>`+rowsHtml(data.jobs,[ ["Request","request_id"],["Provider","provider"],["Provider request","provider_request_id"],["State","state"],["Attempts","attempts"],["Reserved (uUSD)","quote_uusd"],["Last error","last_error"] ])+`<h3>Dead letters</h3>`+(unresolved.map(reconciliationCard).join("")||'<p class="empty-state">No unresolved dead letters.</p>')+`<h3>Resolved cases</h3>`+rowsHtml(resolved,[ ["Reservation","reservation_id"],["Reason","reason"],["Attempts","attempts"],["Resolved by","resolved_by"],["Resolved at","resolved_at"] ]);
+    }
     else content.innerHTML=head+rowsHtml(data.events,[ ["Time","created_at"],["Actor","actor_id"],["Action","action"],["Reason","reason"],["Target","target_type"],["Correlation ID","correlation_id"] ]);
+  }
+
+  async function resolveDeadLetter(form){
+    const values=Object.fromEntries(new FormData(form).entries());
+    const payload={outcome:values.outcome,evidence_ref:values.evidence_ref,reason:values.reason};
+    if(values.outcome==="settled"){
+      payload.provider_request_id=values.provider_request_id;
+      payload.input_tokens=Number(values.input_tokens);
+      payload.output_tokens=Number(values.output_tokens);
+      payload.cost_uusd=Number(values.cost_uusd);
+      payload.provider_cost_uusd=values.provider_cost_uusd===""?null:Number(values.provider_cost_uusd);
+      payload.status=values.status;
+    }
+    try{
+      await adapter.resolveReconciliation(form.dataset.reservationId,payload);
+      await load("reconciliation");
+      setStatus(values.outcome==="settled"?"Verified usage settled and recorded in the audit trail.":"Reservation released after provider non-execution was verified.","success");
+    }catch(error){setStatus(error.message,"error");}
   }
 
   async function submit(form){
@@ -73,7 +100,21 @@ export function attachAdmin({adapter,mode}){
     const keyAction=event.target.closest("[data-key-do]");
     if(keyAction){const form=root.querySelector("[data-key-actions]");if(!form.reportValidity())return;const keyId=new FormData(form).get("key_id");const reason=new FormData(form).get("reason");try{if(keyAction.dataset.keyDo==="rotate"){const rotated=await adapter.rotateApiKey(keyId,reason);freshKey=rotated.key;setStatus("Key rotated. Copy the new key now; the previous key is revoked.","warning");}else{await adapter.revokeApiKey(keyId,reason);freshKey=null;setStatus("API key revoked.","success");}cached.keys=await adapter.listApiKeys();render("keys",cached.keys);}catch(error){setStatus(error.message,"error");}}
   });
-  root.addEventListener("submit",event=>{const form=event.target.closest("[data-admin-form]");if(form){event.preventDefault();if(form.reportValidity())submit(form);}});
+  root.addEventListener("change",event=>{
+    const outcome=event.target.closest("[data-reconcile-outcome]");
+    if(!outcome)return;
+    const form=outcome.closest("[data-reconcile-resolution]");
+    const usage=form.querySelector("[data-reconcile-usage]");
+    const enabled=outcome.value==="settled";
+    usage.hidden=!enabled;
+    usage.querySelectorAll("[required]").forEach(input=>{input.required=enabled;});
+  });
+  root.addEventListener("submit",event=>{
+    const resolution=event.target.closest("[data-reconcile-resolution]");
+    if(resolution){event.preventDefault();if(resolution.reportValidity())resolveDeadLetter(resolution);return;}
+    const form=event.target.closest("[data-admin-form]");
+    if(form){event.preventDefault();if(form.reportValidity())submit(form);}
+  });
   document.addEventListener("click",event=>{
     const jump=event.target.closest("[data-admin-open]");
     if(jump)requestAnimationFrame(()=>load(jump.dataset.adminOpen));

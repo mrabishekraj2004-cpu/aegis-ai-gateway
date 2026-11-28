@@ -63,6 +63,52 @@ testPg("fresh PostgreSQL schema migrates and migration reruns are idempotent", a
   });
 });
 
+
+testPg("manual dead-letter resolution settles or releases atomically and stays tenant-scoped", async () => {
+  await isolatedDatabase(async ({poolA}) => {
+    const store=new PostgresLedger({pool:poolA});
+    await store.seedTenant({id:"tenant_manual",name:"Manual resolution",limit_uusd:1_000_000});
+    await store.seedTenant({id:"tenant_other",name:"Other tenant",limit_uusd:1_000_000});
+    const route={provider:"mock",model:"mock-chat-v1",alias:"demo-model",region:"global",pricing_version:"price-manual",config_version:"cfg-manual",pricing:{input_usd_per_million:1,output_usd_per_million:1}};
+    const settled=await store.reserve({tenantId:"tenant_manual",requestId:"req_manual_settle",quoteUusd:340_000,quoteTokens:100,route});
+    await store.markProviderStarted({reservationId:settled.reservation.reservation_id,provider:"mock",configVersion:"cfg-manual",pricingVersion:"price-manual",route});
+    await store.markProviderRequest(settled.reservation.reservation_id,"mock_receipt_settle");
+    await store.markReconcileRequired(settled.reservation.reservation_id,{provider:"mock",providerRequestId:"mock_receipt_settle"});
+    await store.retryReconciliation({reservationId:settled.reservation.reservation_id,error:"provider outcome uncertain",maxAttempts:0});
+    const isolated=await store.resolveReconciliation({reservationId:settled.reservation.reservation_id,tenantId:"tenant_other",actor:"admin_other",reason:"Wrong tenant attempt",evidenceRef:"provider:wrong-tenant",outcome:"settled",providerRequestId:"mock_receipt_settle",usage:{input_tokens:12,output_tokens:7,cost_uusd:340_000}});
+    assert.equal(isolated.kind,"not_found");
+    const resolved=await store.resolveReconciliation({reservationId:settled.reservation.reservation_id,tenantId:"tenant_manual",actor:"admin_manual",reason:"Provider record confirms usage",evidenceRef:"provider:receipt-settle",outcome:"settled",providerRequestId:"mock_receipt_settle",usage:{input_tokens:12,output_tokens:7,cost_uusd:340_000,provider_cost_uusd:340_000,status:"completed"}});
+    assert.equal(resolved.kind,"resolved");
+    assert.equal(resolved.entry.model,"demo-model");
+    assert.deepEqual(resolved.entry.route,route);
+    const duplicate=await store.resolveReconciliation({reservationId:settled.reservation.reservation_id,tenantId:"tenant_manual",actor:"admin_manual",reason:"Duplicate submission",evidenceRef:"provider:receipt-settle",outcome:"settled",providerRequestId:"mock_receipt_settle",usage:{input_tokens:12,output_tokens:7,cost_uusd:340_000}});
+    assert.deepEqual(duplicate,{kind:"already_resolved",outcome:"settled"});
+    let overview=await store.getOverview("tenant_manual");
+    assert.equal(overview.budget.settled_uusd,340_000);
+    assert.equal(overview.budget.reserved_uusd,0);
+    assert.equal(overview.entries.length,1);
+    let dead=await poolA.query("SELECT resolved_by,resolved_at FROM reconciliation_dead_letters WHERE reservation_id=$1",[settled.reservation.reservation_id]);
+    assert.equal(dead.rows[0].resolved_by,"admin_manual");
+    assert.ok(dead.rows[0].resolved_at);
+    let audit=await store.listAuditEvents("tenant_manual");
+    assert.ok(audit.some(item=>item.action==="reconciliation.settled"&&item.actor_id==="admin_manual"&&item.payload.evidence_ref==="provider:receipt-settle"));
+
+    const released=await store.reserve({tenantId:"tenant_manual",requestId:"req_manual_release",quoteUusd:120_000,quoteTokens:20,route});
+    await store.markProviderStarted({reservationId:released.reservation.reservation_id,provider:"mock",configVersion:"cfg-manual",pricingVersion:"price-manual",route});
+    await store.markReconcileRequired(released.reservation.reservation_id,{provider:"mock"});
+    await store.retryReconciliation({reservationId:released.reservation.reservation_id,error:"provider lookup unresolved",maxAttempts:0});
+    const release=await store.resolveReconciliation({reservationId:released.reservation.reservation_id,tenantId:"tenant_manual",actor:"admin_manual",reason:"Provider confirms no execution",evidenceRef:"provider:absence-884",outcome:"not_executed"});
+    assert.equal(release.kind,"resolved");
+    assert.equal(release.outcome,"not_executed");
+    overview=await store.getOverview("tenant_manual");
+    assert.equal(overview.budget.settled_uusd,340_000);
+    assert.equal(overview.budget.reserved_uusd,0);
+    assert.equal(overview.entries.length,1);
+    audit=await store.listAuditEvents("tenant_manual");
+    assert.ok(audit.some(item=>item.action==="reconciliation.released"&&item.actor_id==="admin_manual"&&item.payload.evidence_ref==="provider:absence-884"));
+  });
+});
+
 testPg("a new tenant receives one auditable first owner atomically", async () => {
   await isolatedDatabase(async ({ poolA }) => {
     const store=new PostgresLedger({pool:poolA});

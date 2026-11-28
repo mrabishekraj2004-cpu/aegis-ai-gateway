@@ -215,6 +215,24 @@ test("platform-wide control-plane access requires a server-configured platform i
   assert.deepEqual(result.body.tenants,[{tenant_id:"tenant_a"}]);
 });
 
+test("manual reconciliation requires control write, safe evidence, and tenant scoping", async () => {
+  const calls=[];
+  const principal={tenantId:"tenant_a",userId:"admin_a",role:"admin",scopes:["control:read","control:write"],platformAdmin:false};
+  const store={async resolveReconciliation(input){calls.push(input);return {kind:"resolved",outcome:input.outcome,entry:null};}};
+  const path="/v1/admin/reconciliation/res_123/resolve";
+  const base={outcome:"settled",reason:"Verified provider usage",evidence_ref:"billing-entry:abc-123",provider_request_id:"provider_req_123",input_tokens:12,output_tokens:7,cost_uusd:340000,provider_cost_uusd:340000,status:"completed"};
+  const noWrite=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:base,principal:{...principal,scopes:["control:read"]},store});
+  assert.equal(noWrite.status,403);
+  const unsafeEvidence=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:{...base,evidence_ref:"https://provider.test/item?id=secret"},principal,store});
+  assert.equal(unsafeEvidence.status,400);
+  const result=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:{...base,route:{provider:"attacker",model:"untrusted"}},principal,store});
+  assert.equal(result.status,200);
+  assert.deepEqual(calls[0].tenantId,"tenant_a");
+  assert.equal(calls[0].actor,"admin_a");
+  assert.deepEqual(calls[0].usage,{input_tokens:12,output_tokens:7,cost_uusd:340000,provider_cost_uusd:340000,status:"completed"});
+  assert.equal("route" in calls[0].usage,false);
+});
+
 test("platform admins can bootstrap the first owner once for a new tenant", async () => {
   const calls=[];
   const principal={tenantId:"platform_tenant",userId:"platform_user",role:"admin",scopes:["control:read","control:write"],platformAdmin:true};
