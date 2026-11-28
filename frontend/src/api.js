@@ -97,6 +97,7 @@ export function createHttpAdapter({ baseUrl = "", getAccessToken, fetchImpl = fe
     listRoutingConfigs:()=>adminRequest("/v1/admin/routing-configs"),
     createRoutingDraft:body=>adminRequest("/v1/admin/routing-configs",{method:"POST",body}),
     publishRoutingConfig:(version,reason)=>adminRequest(`/v1/admin/routing-configs/${encodeURIComponent(version)}/publish`,{method:"POST",body:{reason}}),
+    rollbackRoutingConfig:(version,reason)=>adminRequest(`/v1/admin/routing-configs/${encodeURIComponent(version)}/rollback`,{method:"POST",body:{reason}}),
     listQuotas:()=>adminRequest("/v1/admin/quotas"),
     createQuota:body=>adminRequest("/v1/admin/quotas",{method:"POST",body}),
     listPricing:()=>adminRequest("/v1/admin/pricing"),
