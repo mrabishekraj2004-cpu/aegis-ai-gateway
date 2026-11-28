@@ -1,4 +1,5 @@
 // @ts-check
+import { randomUUID } from "node:crypto";
 /** @param {number} status @param {any} body @param {Record<string, string>} [headers] */
 const response = (status, body, headers = {}) => ({ status, headers: { "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store", ...headers }, body });
 /** @param {import("./contracts.js").TenantPrincipal} principal @param {string} name */
@@ -13,6 +14,17 @@ const platformTenantMemberRoute = path => /^\/v1\/admin\/tenants\/[A-Za-z0-9_-]+
 
 /** @param {any} body */
 function requireReason(body) { return typeof body?.reason === "string" && body.reason.trim().length >= 3; }
+/** @param {unknown} value */
+function validEvidenceReference(value) { return typeof value === "string" && value.length >= 3 && value.length <= 500 && /^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,499}$/.test(value); }
+/** @param {unknown} value */
+function validNonnegativeInteger(value) { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
+/** @param {unknown} value */
+function validProviderRequestId(value) {
+  return typeof value === "string" && value.length >= 1 && value.length <= 256 && Array.from(value).every(character => {
+    const code=character.charCodeAt(0);
+    return code >= 32 && code !== 127;
+  });
+}
 
 /** @param {import("./contracts.js").AdminRequest} options */
 export async function handleAdminRequest({ method, path, url, body, principal, store, keyService, providers = new Map(), providerHealth = () => /** @type {Array<{name:string}>} */([]) }) {
@@ -102,6 +114,31 @@ export async function handleAdminRequest({ method, path, url, body, principal, s
     if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});
     if (!requireReason(body)) return response(400,{error:{code:"invalid_request",message:"A reason is required to disable a quota."}});
     return await store.deactivateQuotaPolicy({quotaId:Number(quotaId[1]),tenantId:principal.tenantId,actor:principal.userId,reason:body.reason})?response(200,{deactivated:true}):response(404,{error:{code:"quota_not_found",message:"Quota not found."}});
+  }
+  const reconciliationResolution=path.match(/^\/v1\/admin\/reconciliation\/([A-Za-z0-9_-]+)\/resolve$/);
+  if (verb==="POST" && reconciliationResolution) {
+    if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});
+    if (!requireReason(body) || body.reason.trim().length > 500 || !validEvidenceReference(body.evidence_ref)) return response(400,{error:{code:"invalid_request",message:"A reason (3-500 characters) and sanitized evidence reference (3-500 letters, digits, or . _ : / # -) are required."}});
+    if (!["settled","not_executed"].includes(body.outcome)) return response(400,{error:{code:"invalid_request",message:"outcome must be settled or not_executed."}});
+    let usage=null;
+    if (body.outcome==="settled") {
+      if (!validProviderRequestId(body.provider_request_id)) return response(400,{error:{code:"invalid_request",message:"A valid provider request ID is required when settling usage."}});
+      if (!validNonnegativeInteger(body.input_tokens) || !validNonnegativeInteger(body.output_tokens) || !validNonnegativeInteger(body.cost_uusd) || (body.provider_cost_uusd!=null && !validNonnegativeInteger(body.provider_cost_uusd)) || !["completed","partial"].includes(body.status ?? "completed")) return response(400,{error:{code:"invalid_request",message:"Settled usage requires non-negative safe integer token and cost values and a completed or partial status."}});
+      usage={input_tokens:body.input_tokens,output_tokens:body.output_tokens,cost_uusd:body.cost_uusd,provider_cost_uusd:body.provider_cost_uusd ?? null,status:body.status ?? "completed"};
+    }
+    const result=await store.resolveReconciliation({
+      reservationId:reconciliationResolution[1],tenantId:principal.tenantId,actor:principal.userId,
+      reason:body.reason.trim(),evidenceRef:body.evidence_ref,outcome:body.outcome,
+      providerRequestId:body.outcome==="settled"?body.provider_request_id:null,usage,
+      correlationId:randomUUID()
+    });
+    if (result.kind==="not_found") return response(404,{error:{code:"reconciliation_not_found",message:"Reconciliation case not found."}});
+    if (result.kind==="not_dead_letter") return response(409,{error:{code:"reconciliation_not_dead_letter",message:"Only dead-letter cases can be resolved manually."}});
+    if (result.kind==="receipt_mismatch") return response(409,{error:{code:"provider_receipt_mismatch",message:"The provider request ID does not match the saved receipt."}});
+    if (result.kind==="provider_route_missing") return response(422,{error:{code:"provider_route_missing",message:"The stored provider route is missing; usage cannot be safely priced."}});
+    if (result.kind==="cost_exceeds_reservation") return response(422,{error:{code:"cost_exceeds_reservation",message:"Verified provider cost exceeds the reserved amount."}});
+    if (result.kind==="already_resolved") return response(200,{resolved:true,duplicate:true,outcome:result.outcome});
+    return response(200,{resolved:true,duplicate:false,outcome:result.outcome,usage:result.entry ?? null});
   }
   if (verb==="GET" && path==="/v1/admin/reconciliation") return response(200,await store.listReconciliationJobs(principal.tenantId));
   if (verb==="GET" && path==="/v1/admin/audit-events") return response(200,{events:await store.listAuditEvents(principal.tenantId,{limit:Number(url.searchParams.get("limit") ?? 100),beforeId:url.searchParams.get("before_id")})});

@@ -182,3 +182,22 @@ test("admin adapter bootstraps the first owner using the selected tenant path", 
   assert.deepEqual(JSON.parse(requests[0].options.body),{user_id:"owner-a",email:"owner@example.test",display_name:"Owner",reason:"Tenant setup"});
   assert.deepEqual(result,{tenant_id:"tenant-a",user_id:"owner-a",role:"owner"});
 });
+
+test("admin reconciliation adapter posts only the requested resolution fields to the reservation route", async () => {
+  const requests=[];
+  const adapter=createHttpAdapter({
+    baseUrl:"https://gateway.example",
+    getAccessToken:async()=>"test-credential",
+    fetchImpl:async(url,options={})=>{
+      requests.push({url,options});
+      return new Response(JSON.stringify({resolved:true,duplicate:false,outcome:"settled"}),{status:200,headers:{"content-type":"application/json"}});
+    }
+  });
+  const body={outcome:"settled",reason:"Provider record verified",evidence_ref:"provider:usage-991",provider_request_id:"provider-request-991",input_tokens:12,output_tokens:7,cost_uusd:340000,provider_cost_uusd:340000,status:"completed"};
+  const result=await adapter.resolveReconciliation("res_991",body);
+  assert.equal(requests[0].url,"https://gateway.example/v1/admin/reconciliation/res_991/resolve");
+  assert.equal(requests[0].options.method,"POST");
+  assert.equal(requests[0].options.headers.Authorization,"Bearer test-credential");
+  assert.deepEqual(JSON.parse(requests[0].options.body),body);
+  assert.deepEqual(result,{resolved:true,duplicate:false,outcome:"settled"});
+});

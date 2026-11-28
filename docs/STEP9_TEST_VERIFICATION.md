@@ -1,10 +1,26 @@
 # Step 9 — Test Verification
 
-> **Follow-up audit (2026-11-27):** This file records the earlier Step 8 source snapshot and is not a verification record for the production-feature changes that followed. The current feature audit is [FEATURE_COMPLETION_AUDIT.md](FEATURE_COMPLETION_AUDIT.md). On that newer snapshot, backend checks passed with **22 passed, 0 failed, 9 skipped**; frontend checks passed with **14 passed, 0 failed, 0 skipped**. PostgreSQL tests remain unrun, and no live HTTP/browser/provider verification was completed. Treat the historical counts and source digest below as historical only.
+> **Current candidate update (2026-11-28):** PR #6 head `9623c1b0d19a26ac80333dd8d4a2c9a76381a5d4` passed GitHub CI: backend **47 passed, 0 failed, 0 skipped** with PostgreSQL enabled; frontend **16 passed, 0 failed, 0 skipped**; syntax, type, lint, and Security passed. The PR stack remains open and unmerged. A frontend-only Vercel staging preview of this head is READY and HTTP-checked; it does not provide the API, workers, or database. Live browser-to-API, provider, and full PostgreSQL deployment checks remain pending. See [FEATURE_COMPLETION_AUDIT.md](FEATURE_COMPLETION_AUDIT.md). The detailed Step 8 commands and the original standalone snapshot below are historical results.
 
-**Date:** 2026-11-27  
-**Outcome:** **Blocked for Step 10 deployment.** Frontend and backend suites pass at the Step 8 baseline. Live browser/API verification and all seven PostgreSQL integration checks remain pending because this workspace cannot reach loopback sockets, `git.chatgpt-team.site`, or the npm registry.  
-**Scope:** No gateway or frontend source fixes were made. A local static demo snapshot was committed and packaged for the existing private Site, but source push and publication were blocked. With the user's approval, an isolated Neon test project was created; no schema or test data has been written to it.
+## Initial local run (2026-11-27; historical)
+
+The original standalone run matched the Step 8 baseline: frontend 14 passed; backend 18 passed and 7 PostgreSQL tests skipped. Live loopback/browser access, registry access, and publication to ChatGPT Sites were blocked in that workspace. An isolated Neon test project was created with the user's approval, but it was not used. Later, GitHub Actions supplied a disposable PostgreSQL service and passed all seven database integration tests; see the current candidate section above. The Site publication attempt remains blocked.
+
+## Current candidate verification (2026-11-28)
+
+- Candidate commit: `9623c1b0d19a26ac80333dd8d4a2c9a76381a5d4`; PR #6 is stacked on PR #5 and is still open.
+- GitHub Actions [CI run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46110899870): backend syntax, TypeScript, ESLint, and PostgreSQL integration suite passed (**47 passed, 0 failed, 0 skipped**); frontend syntax and tests passed (**16 passed, 0 failed, 0 skipped**).
+- GitHub Actions [Security run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46110899926): dependency audits, secret scan, CodeQL, and backend/frontend image scans passed.
+- End-to-end HTTP/browser-to-API, provider API, deployed worker, and backend-process restart scenarios are not verified. Vercel has no project environment variables for this app, so the static frontend preview is not the full PostgreSQL-backed service; the static HTTP checks are listed in the staging section.
+
+## Frontend-only Vercel staging preview (2026-11-28)
+
+- Deployment: `dpl_4rqVew7xuJu2koiDAhnaGrBwzCor`, **READY**, from PR #6 head `9623c1b0d19a26ac80333dd8d4a2c9a76381a5d4`.
+- Preview origin: https://aegis-ai-gateway-6992q5iqg-abishek-f58a.vercel.app (Vercel SSO protection remains enabled; a temporary share link was sent directly to the user and is not stored in this repository).
+- HTTP evidence: the root document and `/src/admin.js` each returned **200 OK** through Vercel's protected deployment fetch. The JavaScript response includes the new dead-letter resolution form and its provider-evidence inputs.
+- The deployment is a static frontend preview. `runtime-config.js` contains no API credentials or backend URL; no backend, PostgreSQL service, or worker was deployed. The preview must not be represented as the full SaaS gateway.
+- The Vercel project framework setting was cleared from an incorrect `nextjs` value so the static source could deploy. Production domains and the production alias were not promoted or changed.
+- This HTTP fetch confirms the page and UI assets are served; it is not a real browser rendering or an end-to-end API test. Desktop, narrow-screen, keyboard-only, live API, CORS, and authentication behavior remain pending.
 
 ## Tested source snapshot
 

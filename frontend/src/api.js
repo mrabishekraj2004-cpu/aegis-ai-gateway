@@ -103,6 +103,7 @@ export function createHttpAdapter({ baseUrl = "", getAccessToken, fetchImpl = fe
     listPricing:()=>adminRequest("/v1/admin/pricing"),
     createPricing:body=>adminRequest("/v1/admin/pricing",{method:"POST",body}),
     listReconciliation:()=>adminRequest("/v1/admin/reconciliation"),
+    resolveReconciliation:(reservationId,body)=>adminRequest(`/v1/admin/reconciliation/${encodeURIComponent(reservationId)}/resolve`,{method:"POST",body}),
     listAuditEvents:()=>adminRequest("/v1/admin/audit-events"),
     getProviderHealth:()=>adminRequest("/v1/admin/provider-health")
   };
