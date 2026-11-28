@@ -18,6 +18,13 @@ function requireReason(body) { return typeof body?.reason === "string" && body.r
 function validEvidenceReference(value) { return typeof value === "string" && value.length >= 3 && value.length <= 500 && /^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,499}$/.test(value); }
 /** @param {unknown} value */
 function validNonnegativeInteger(value) { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
+/** @param {unknown} value */
+function validProviderRequestId(value) {
+  return typeof value === "string" && value.length >= 1 && value.length <= 256 && Array.from(value).every(character => {
+    const code=character.charCodeAt(0);
+    return code >= 32 && code !== 127;
+  });
+}
 
 /** @param {import("./contracts.js").AdminRequest} options */
 export async function handleAdminRequest({ method, path, url, body, principal, store, keyService, providers = new Map(), providerHealth = () => /** @type {Array<{name:string}>} */([]) }) {
@@ -115,7 +122,7 @@ export async function handleAdminRequest({ method, path, url, body, principal, s
     if (!["settled","not_executed"].includes(body.outcome)) return response(400,{error:{code:"invalid_request",message:"outcome must be settled or not_executed."}});
     let usage=null;
     if (body.outcome==="settled") {
-      if (typeof body.provider_request_id!=="string" || body.provider_request_id.length<1 || body.provider_request_id.length>256 || /[\r\n\u0000-\u001f]/.test(body.provider_request_id)) return response(400,{error:{code:"invalid_request",message:"A valid provider request ID is required when settling usage."}});
+      if (!validProviderRequestId(body.provider_request_id)) return response(400,{error:{code:"invalid_request",message:"A valid provider request ID is required when settling usage."}});
       if (!validNonnegativeInteger(body.input_tokens) || !validNonnegativeInteger(body.output_tokens) || !validNonnegativeInteger(body.cost_uusd) || (body.provider_cost_uusd!=null && !validNonnegativeInteger(body.provider_cost_uusd)) || !["completed","partial"].includes(body.status ?? "completed")) return response(400,{error:{code:"invalid_request",message:"Settled usage requires non-negative safe integer token and cost values and a completed or partial status."}});
       usage={input_tokens:body.input_tokens,output_tokens:body.output_tokens,cost_uusd:body.cost_uusd,provider_cost_uusd:body.provider_cost_uusd ?? null,status:body.status ?? "completed"};
     }
