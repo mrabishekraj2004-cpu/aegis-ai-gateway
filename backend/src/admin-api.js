@@ -95,6 +95,15 @@ export async function handleAdminRequest({ method, path, url, body, principal, s
     const row=await store.publishRoutingConfig({versionId:Number(publish[1]),tenantId:principal.tenantId,actor:principal.userId,reason:body.reason});
     return row?response(200,row):response(404,{error:{code:"configuration_not_found",message:"Draft configuration not found."}});
   }
+  const rollback=path.match(/^\\/v1\\/admin\\/routing-configs\\/(\\d+)\\/rollback$/);
+  if (verb==="POST" && rollback) {
+    if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});
+    if (!requireReason(body)) return response(400,{error:{code:"invalid_request",message:"A reason is required to roll back routing configuration."}});
+    const versionId=Number(rollback[1]);
+    if (!Number.isSafeInteger(versionId)) return response(400,{error:{code:"invalid_request",message:"Routing configuration version must be a safe integer."}});
+    const row=await store.rollbackRoutingConfig({versionId,tenantId:principal.tenantId,actor:principal.userId,reason:body.reason});
+    return row?response(200,row):response(404,{error:{code:"configuration_not_found",message:"Published routing version not found for this tenant."}});
+  }
   if (verb==="GET" && path==="/v1/admin/pricing") return response(200,{versions:await store.listPricingVersions()});
   if (verb==="POST" && path==="/v1/admin/pricing") {
     if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});

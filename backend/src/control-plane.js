@@ -223,6 +223,7 @@ export class PostgresControlPlane {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('routing_config:' || COALESCE($1::text, '<global>'), 0))", [tenantId]);
       const config = await client.query("SELECT * FROM routing_config_versions WHERE version_id=$1 AND tenant_id IS NOT DISTINCT FROM $2 AND state='draft' FOR UPDATE", [versionId,tenantId]);
       if (!config.rows[0]) { await client.query("ROLLBACK"); return null; }
       await client.query(
@@ -235,6 +236,43 @@ export class PostgresControlPlane {
       await client.query(
         `INSERT INTO audit_events (tenant_id,actor_id,action,reason,correlation_id,target_type,target_id)
          VALUES ($1,$2,'routing.published',$3,$4,'routing_config',$5)`, [tenantId,actor,reason,randomUUID(),String(versionId)]
+      );
+      await client.query("COMMIT");
+      return result.rows[0];
+    } catch (error) { await client.query("ROLLBACK").catch(() => {}); throw error; }
+    finally { client.release(); }
+  }
+
+  async rollbackRoutingConfig({ versionId, tenantId = null, actor, reason }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('routing_config:' || COALESCE($1::text, '<global>'), 0))", [tenantId]);
+      const target = await client.query(
+        "SELECT version_id,config FROM routing_config_versions WHERE version_id=$1 AND tenant_id IS NOT DISTINCT FROM $2 AND state='rolled_back' AND published_at IS NOT NULL FOR UPDATE",
+        [versionId,tenantId]
+      );
+      if (!target.rows[0]) { await client.query("ROLLBACK"); return null; }
+      const current = await client.query(
+        "SELECT version_id FROM routing_config_versions WHERE tenant_id IS NOT DISTINCT FROM $1 AND state='published' ORDER BY effective_at DESC NULLS LAST,version_id DESC LIMIT 1 FOR UPDATE",
+        [tenantId]
+      );
+      const currentVersionId = current.rows[0]?.version_id ?? null;
+      await client.query(
+        "UPDATE routing_config_versions SET state='rolled_back' WHERE tenant_id IS NOT DISTINCT FROM $1 AND state IN ('published','scheduled')",
+        [tenantId]
+      );
+      const configJson = typeof target.rows[0].config === "string" ? target.rows[0].config : JSON.stringify(target.rows[0].config);
+      const result = await client.query(
+        `INSERT INTO routing_config_versions (tenant_id,state,config,created_by,reason,effective_at,published_at,rolled_back_from)
+         VALUES ($1,'published',$2::jsonb,$3,$4,now(),now(),$5)
+         RETURNING version_id,tenant_id,state,config,created_by,reason,created_at,effective_at,published_at,rolled_back_from`,
+        [tenantId,configJson,actor,reason,currentVersionId]
+      );
+      await client.query(
+        `INSERT INTO audit_events (tenant_id,actor_id,action,reason,correlation_id,target_type,target_id,payload)
+         VALUES ($1,$2,'routing.rolled_back',$3,$4,'routing_config',$5,$6::jsonb)`,
+        [tenantId,actor,reason,randomUUID(),String(result.rows[0].version_id),JSON.stringify({ rolled_back_to_version: String(versionId), rolled_back_from_version: currentVersionId === null ? null : String(currentVersionId) })]
       );
       await client.query("COMMIT");
       return result.rows[0];
@@ -258,7 +296,7 @@ export class PostgresControlPlane {
 
   async listRoutingConfigs(tenantId) {
     const result = await this.pool.query(
-      `SELECT version_id,tenant_id,state,config,created_by,reason,created_at,effective_at,published_at
+      `SELECT version_id,tenant_id,state,config,created_by,reason,created_at,effective_at,published_at,rolled_back_from
        FROM routing_config_versions WHERE tenant_id IS NULL OR tenant_id=$1 ORDER BY version_id DESC`, [tenantId]
     );
     return result.rows.map(row => ({ ...row, config: json(row.config) }));

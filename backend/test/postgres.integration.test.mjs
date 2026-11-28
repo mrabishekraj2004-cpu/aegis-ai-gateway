@@ -287,6 +287,33 @@ testPg("outbox worker publishes ledger events idempotently to the integration ev
   });
 });
 
+testPg("routing rollback creates a new published version and an audit event", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store=new PostgresLedger({pool:poolA});
+    await store.seedTenant({id:"tenant_route_rollback",name:"Route Rollback",limit_uusd:1_000_000});
+    const original={aliases:{"model-a":[{provider:"mock",model:"mock-a",priority:1,weight:100}]}};
+    const changed={aliases:{"model-a":[{provider:"mock",model:"mock-b",priority:1,weight:100}]}};
+    const first=await store.createRoutingDraft({tenantId:"tenant_route_rollback",config:original,actor:"owner_route",reason:"Initial route"});
+    await store.publishRoutingConfig({versionId:first.version_id,tenantId:"tenant_route_rollback",actor:"owner_route",reason:"Publish initial route"});
+    const second=await store.createRoutingDraft({tenantId:"tenant_route_rollback",config:changed,actor:"owner_route",reason:"Change route"});
+    await store.publishRoutingConfig({versionId:second.version_id,tenantId:"tenant_route_rollback",actor:"owner_route",reason:"Publish changed route"});
+    const rollback=await store.rollbackRoutingConfig({versionId:first.version_id,tenantId:"tenant_route_rollback",actor:"owner_route",reason:"Restore approved route"});
+    assert.ok(rollback);
+    assert.notEqual(String(rollback.version_id),String(first.version_id));
+    assert.equal(String(rollback.rolled_back_from),String(second.version_id));
+    const active=await store.getActiveRoutingConfig("tenant_route_rollback");
+    assert.deepEqual(active.aliases,original.aliases);
+    const versions=await store.listRoutingConfigs("tenant_route_rollback");
+    assert.equal(versions.find(row=>String(row.version_id)===String(second.version_id)).state,"rolled_back");
+    assert.equal(versions.find(row=>String(row.version_id)===String(rollback.version_id)).state,"published");
+    const audit=await store.listAuditEvents("tenant_route_rollback");
+    const event=audit.find(row=>row.action==="routing.rolled_back");
+    assert.ok(event);
+    assert.equal(event.actor_id,"owner_route");
+    assert.equal(event.payload.rolled_back_to_version,String(first.version_id));
+  });
+});
+
 testPg("user request, token, cost, and concurrency quotas are reserved atomically", async () => {
   await isolatedDatabase(async ({ poolA }) => {
     const store=new PostgresLedger({pool:poolA});

@@ -215,6 +215,24 @@ test("platform-wide control-plane access requires a server-configured platform i
   assert.deepEqual(result.body.tenants,[{tenant_id:"tenant_a"}]);
 });
 
+test("routing rollback requires control-write and records a tenant-scoped version", async () => {
+  const calls=[];
+  const principal={tenantId:"tenant_a",userId:"admin_a",role:"admin",scopes:["control:read","control:write"],platformAdmin:false};
+  const path="/v1/admin/routing-configs/41/rollback";
+  const store={async rollbackRoutingConfig(input){calls.push(input);return {version_id:43,state:"published",rolled_back_from:42};}};
+  const noWrite=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:{reason:"Restore approved route"},principal:{...principal,scopes:["control:read"]},store});
+  assert.equal(noWrite.status,403);
+  const missingReason=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:{},principal,store});
+  assert.equal(missingReason.status,400);
+  assert.equal(calls.length,0);
+  const result=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:{reason:"Restore approved route"},principal,store});
+  assert.equal(result.status,200);
+  assert.equal(result.body.rolled_back_from,42);
+  assert.deepEqual(calls,[{versionId:41,tenantId:"tenant_a",actor:"admin_a",reason:"Restore approved route"}]);
+  const missing=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:{reason:"Restore approved route"},principal,store:{async rollbackRoutingConfig(){return null;}}});
+  assert.equal(missing.status,404);
+});
+
 test("manual reconciliation requires control write, safe evidence, and tenant scoping", async () => {
   const calls=[];
   const principal={tenantId:"tenant_a",userId:"admin_a",role:"admin",scopes:["control:read","control:write"],platformAdmin:false};
