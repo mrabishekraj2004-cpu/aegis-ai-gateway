@@ -24,6 +24,7 @@ export interface ApiKeyRecord {
 export interface AuthStore {
   authenticateApiKey(keyId: string): Promise<ApiKeyRecord | null>;
   touchApiKey(keyId: string): Promise<void>;
+  resolveNeonAuthUser?(input: { userId: string; email: string; displayName: string; tenantId?: string | null; starterLimitUusd?: number }): Promise<{ tenant_id: string; role: TenantRole; tenant_name?: string } | null>;
 }
 
 export interface AuthHeaders {
@@ -38,6 +39,9 @@ export interface AuthenticatorOptions {
   store?: AuthStore;
   keyPepper?: string;
   platformAdminUserIds?: string | string[];
+  neonAuthJwksUrl?: string;
+  neonAuthUrl?: string;
+  sessionKeySet?: import("jose").JWTVerifyGetKey | null;
 }
 
 export interface AdminStore {

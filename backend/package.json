@@ -12,7 +12,7 @@
     "reconcile": "node scripts/reconcile-worker.mjs",
     "load-test": "node scripts/load.mjs",
     "provider-compat": "node scripts/live-provider-compat.mjs",
-    "check": "node --check server.mjs && node --check workers.mjs && node --check src/auth.js && node --check src/api-keys.js && node --check src/control-plane.js && node --check src/admin-api.js && node --check src/policy-router.js && node --check src/pricing.js && node --check src/providers.js && node --check src/reconciliation-worker.js && node --check src/outbox-worker.js && node --check src/ledger.js && node --check src/mock-provider.js && node --check src/gateway.js && node --check src/postgres-ledger.js && node --check src/storage.js && node --check src/database-config.js && node --check src/migrations.js && node --check scripts/migrate.mjs && node --check scripts/seed-local.mjs && node --check scripts/create-admin-key.mjs && node --check scripts/reconcile-worker.mjs && node --check scripts/load.mjs && node --check scripts/live-provider-compat.mjs && node --check test/operations-scripts.test.mjs && node --check test/postgres.integration.test.mjs && node --check test/production-features.test.mjs && node --check test/storage-mode.test.mjs",
+    "check": "node --check server.mjs && node --check workers.mjs && node --check src/auth.js && node --check src/api-keys.js && node --check src/control-plane.js && node --check src/admin-api.js && node --check src/policy-router.js && node --check src/pricing.js && node --check src/providers.js && node --check src/reconciliation-worker.js && node --check src/outbox-worker.js && node --check src/ledger.js && node --check src/mock-provider.js && node --check src/gateway.js && node --check src/postgres-ledger.js && node --check src/storage.js && node --check src/database-config.js && node --check src/migrations.js && node --check scripts/migrate.mjs && node --check scripts/seed-local.mjs && node --check scripts/create-admin-key.mjs && node --check scripts/reconcile-worker.mjs && node --check scripts/load.mjs && node --check scripts/live-provider-compat.mjs && node --check test/operations-scripts.test.mjs && node --check test/postgres.integration.test.mjs && node --check test/production-features.test.mjs && node --check test/storage-mode.test.mjs && node --check test/neon-auth.test.mjs",
     "typecheck": "tsc --project tsconfig.json",
     "lint": "eslint --config eslint.config.js src server.mjs workers.mjs scripts test",
     "test": "node --test"
@@ -23,7 +23,8 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.223.0",
     "@opentelemetry/sdk-metrics": "~2.12.0",
     "@opentelemetry/sdk-node": "^0.223.2",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "jose": "6.2.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

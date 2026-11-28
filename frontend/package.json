@@ -6,6 +6,6 @@
   "scripts": {
     "start": "node server.mjs",
     "check": "node --check server.mjs && node --check src/api.js && node --check src/admin.js && node --check src/fixtures.js && node --check src/main.js",
-    "test": "node --test"
+    "test": "npm run build && node --test"
   }
 }

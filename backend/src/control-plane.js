@@ -9,6 +9,60 @@ export class PostgresControlPlane {
     this.clock = clock;
   }
 
+  async resolveNeonAuthUser({ userId, email, displayName, tenantId = null, starterLimitUusd = 340000 }) {
+    if (!Number.isSafeInteger(starterLimitUusd) || starterLimitUusd < 0 || starterLimitUusd > 1_000_000_000_000) throw new Error("Starter monthly limit must be a safe non-negative micro-USD amount.");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO aegis_users (user_id,email,display_name) VALUES ($1,$2,$3)
+         ON CONFLICT (user_id) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,active=TRUE`,
+        [userId,email,displayName.slice(0,160)]
+      );
+      const member = await client.query(
+        `SELECT m.tenant_id,m.role,t.name AS tenant_name
+         FROM tenant_memberships m JOIN tenants t ON t.tenant_id=m.tenant_id
+         WHERE m.user_id=$1 AND m.active=TRUE AND t.active=TRUE
+           AND ($2::text IS NULL OR m.tenant_id=$2)
+         ORDER BY m.created_at,m.tenant_id LIMIT 1`,
+        [userId,tenantId]
+      );
+      if (member.rows[0]) {
+        await client.query("COMMIT");
+        return member.rows[0];
+      }
+      if (tenantId !== null) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      const existing = await client.query("SELECT tenant_id FROM tenant_memberships WHERE user_id=$1 AND active=TRUE LIMIT 1", [userId]);
+      if (existing.rowCount) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      const newTenantId = `tenant_${randomUUID()}`;
+      const tenantName = `${displayName.trim().slice(0,120) || "My"} Workspace`;
+      await client.query(
+        "INSERT INTO tenants (tenant_id,name,monthly_limit_uusd) VALUES ($1,$2,$3)",
+        [newTenantId,tenantName,starterLimitUusd]
+      );
+      await client.query(
+        "INSERT INTO tenant_memberships (tenant_id,user_id,role) VALUES ($1,$2,'owner')",
+        [newTenantId,userId]
+      );
+      await client.query(
+        `INSERT INTO audit_events (tenant_id,actor_id,action,reason,correlation_id,target_type,target_id,payload)
+         VALUES ($1,$2,'tenant.owner_created','First verified Neon Auth session',$3,'tenant',$1,$4::jsonb)`,
+        [newTenantId,userId,randomUUID(),JSON.stringify({ monthly_limit_uusd:starterLimitUusd, source:"neon_auth_signup" })]
+      );
+      await client.query("COMMIT");
+      return { tenant_id:newTenantId,role:"owner",tenant_name:tenantName };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally { client.release(); }
+  }
+
   async authenticateApiKey(keyId) {
     const result = await this.pool.query(
       `SELECT k.key_id, k.key_hash, k.environment, k.tenant_id, k.user_id, k.name, k.scopes,

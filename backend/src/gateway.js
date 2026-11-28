@@ -56,7 +56,7 @@ export function createGateway({ mode = "disabled", credentials, store, provider 
   const policyRouter = router ?? new PolicyRouter({ providers: providerSet, store });
   const auth = createAuthenticator({ mode, credentials, store, keyPepper });
   const keyService = keyPepper && store.createApiKey ? new ApiKeyService({ store, pepper: keyPepper }) : null;
-  const corsAllowedHeaders = ["Authorization", "Content-Type", "Idempotency-Key", ...(mode === "local" || mode === "test" ? ["X-Aegis-Mock-Scenario"] : [])].join(", ");
+  const corsAllowedHeaders = ["Authorization", "Content-Type", "Idempotency-Key", "X-Aegis-Tenant-ID", ...(mode === "local" || mode === "test" ? ["X-Aegis-Mock-Scenario"] : [])].join(", ");
   const can = (principal, scope) => principal?.scopes?.includes("admin") || principal?.scopes?.includes(scope);
   async function handleRequest({ method = "GET", path = "/", headers = {}, body = null, signal } = {}) {
     const origin = header(headers, "origin");
