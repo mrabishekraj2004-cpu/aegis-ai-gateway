@@ -2,11 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm ci --prefix backend --no-audit --no-fund && npm ci --prefix frontend --no-audit --no-fund",
   "buildCommand": "npm run build --prefix frontend",
-  "outputDirectory": "frontend/dist",
-  "crons": [
-    {
-      "path": "/api/workers/cron",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  "outputDirectory": "frontend/dist"
 }
