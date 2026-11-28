@@ -1,5 +1,4 @@
 // @ts-check
-import { randomUUID } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { parseApiKey, verifyApiKey } from "./api-keys.js";
 
