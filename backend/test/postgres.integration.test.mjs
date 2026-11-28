@@ -63,6 +63,25 @@ testPg("fresh PostgreSQL schema migrates and migration reruns are idempotent", a
   });
 });
 
+testPg("a new tenant receives one auditable first owner atomically", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store=new PostgresLedger({pool:poolA});
+    await store.seedTenant({id:"tenant_bootstrap",name:"Bootstrap tenant",limit_uusd:1_000_000});
+    const input={tenantId:"tenant_bootstrap",userId:"owner_bootstrap",email:"owner@example.test",displayName:"Initial Owner",actor:"platform_admin",reason:"Provision initial tenant owner"};
+    const created=await store.bootstrapTenantOwner(input);
+    assert.equal(created.kind,"created");
+    assert.equal(created.role,"owner");
+    const duplicate=await store.bootstrapTenantOwner({...input,userId:"owner_second",email:"second@example.test"});
+    assert.equal(duplicate.kind,"already_bootstrapped");
+    const members=await store.listMembers("tenant_bootstrap");
+    assert.equal(members.length,1);
+    assert.equal(members[0].user_id,"owner_bootstrap");
+    assert.equal(members[0].role,"owner");
+    const audit=await store.listAuditEvents("tenant_bootstrap");
+    assert.ok(audit.some(event=>event.action==="membership.owner_bootstrapped"&&event.actor_id==="platform_admin"));
+  });
+});
+
 testPg("settled usage and budget survive closing and reopening independent pools", async () => {
   await isolatedDatabase(async ({ Pool, poolA, options, closePoolA }) => {
     const first = new PostgresLedger({ pool: poolA });

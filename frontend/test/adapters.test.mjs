@@ -165,3 +165,20 @@ test("API network failure is surfaced without a fixture result", async () => {
   });
   await assert.rejects(adapter.submitRequest(sample), /gateway unavailable/);
 });
+
+test("admin adapter bootstraps the first owner using the selected tenant path", async () => {
+  const requests=[];
+  const adapter=createHttpAdapter({
+    baseUrl:"https://gateway.example",
+    getAccessToken:async()=>"test-credential",
+    fetchImpl:async(url,options={})=>{
+      requests.push({url,options});
+      return new Response(JSON.stringify({tenant_id:"tenant-a",user_id:"owner-a",role:"owner"}),{status:201,headers:{"content-type":"application/json"}});
+    }
+  });
+  const result=await adapter.bootstrapTenantOwner("tenant-a",{user_id:"owner-a",email:"owner@example.test",display_name:"Owner",reason:"Tenant setup"});
+  assert.equal(requests[0].url,"https://gateway.example/v1/admin/tenants/tenant-a/members");
+  assert.equal(requests[0].options.method,"POST");
+  assert.deepEqual(JSON.parse(requests[0].options.body),{user_id:"owner-a",email:"owner@example.test",display_name:"Owner",reason:"Tenant setup"});
+  assert.deepEqual(result,{tenant_id:"tenant-a",user_id:"owner-a",role:"owner"});
+});

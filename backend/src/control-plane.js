@@ -116,6 +116,35 @@ export class PostgresControlPlane {
     finally { client.release(); }
   }
 
+  async bootstrapTenantOwner({ tenantId, userId, email, displayName, actor, reason }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const tenant = await client.query("SELECT tenant_id FROM tenants WHERE tenant_id=$1 AND active=TRUE FOR UPDATE", [tenantId]);
+      if (!tenant.rowCount) { await client.query("ROLLBACK"); return { kind:"tenant_not_found" }; }
+      const members = await client.query("SELECT 1 FROM tenant_memberships WHERE tenant_id=$1 AND active=TRUE LIMIT 1", [tenantId]);
+      if (members.rowCount) { await client.query("ROLLBACK"); return { kind:"already_bootstrapped" }; }
+      await client.query(
+        `INSERT INTO aegis_users (user_id,email,display_name) VALUES ($1,$2,$3)
+         ON CONFLICT (user_id) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,active=TRUE`,
+        [userId,email,displayName]
+      );
+      await client.query(
+        `INSERT INTO tenant_memberships (tenant_id,user_id,role) VALUES ($1,$2,'owner')
+         ON CONFLICT (tenant_id,user_id) DO UPDATE SET role='owner',active=TRUE`,
+        [tenantId,userId]
+      );
+      await client.query(
+        `INSERT INTO audit_events (tenant_id,actor_id,action,reason,correlation_id,target_type,target_id,payload)
+         VALUES ($1,$2,'membership.owner_bootstrapped',$3,$4,'membership',$5,$6::jsonb)`,
+        [tenantId,actor,reason,randomUUID(),userId,JSON.stringify({ role:"owner" })]
+      );
+      await client.query("COMMIT");
+      return { kind:"created",tenant_id:tenantId,user_id:userId,role:"owner" };
+    } catch (error) { await client.query("ROLLBACK").catch(() => {}); throw error; }
+    finally { client.release(); }
+  }
+
   async listMembers(tenantId) {
     const result = await this.pool.query(
       `SELECT u.user_id,u.email,u.display_name,m.role,m.active,m.created_at

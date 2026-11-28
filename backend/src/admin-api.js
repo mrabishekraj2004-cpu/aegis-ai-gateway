@@ -8,6 +8,8 @@ const adminRole = principal => ["owner","admin"].includes(principal?.role);
 /** @param {import("./contracts.js").TenantPrincipal} principal */
 const platformAdmin = principal => principal?.platformAdmin === true;
 const platformRoutes = new Set(["/v1/admin/tenants", "/v1/admin/pricing", "/v1/admin/provider-health"]);
+/** @param {string} path */
+const platformTenantMemberRoute = path => /^\/v1\/admin\/tenants\/[A-Za-z0-9_-]+\/members$/.test(path);
 
 /** @param {any} body */
 function requireReason(body) { return typeof body?.reason === "string" && body.reason.trim().length >= 3; }
@@ -18,13 +20,22 @@ export async function handleAdminRequest({ method, path, url, body, principal, s
   const writeAllowed = adminRole(principal) && scope(principal,"control:write");
   if (!readAllowed) return response(403,{error:{code:"insufficient_scope",message:"An owner or administrator credential with control-plane access is required."}});
   const verb=method.toUpperCase();
-  if (platformRoutes.has(path) && !platformAdmin(principal)) return response(403,{error:{code:"platform_admin_required",message:"This control-plane resource is restricted to platform administrators."}});
+  if ((platformRoutes.has(path) || platformTenantMemberRoute(path)) && !platformAdmin(principal)) return response(403,{error:{code:"platform_admin_required",message:"This control-plane resource is restricted to platform administrators."}});
   if (verb==="GET" && path==="/v1/admin/tenants") return response(200,{tenants:await store.listTenants()});
   if (verb==="POST" && path==="/v1/admin/tenants") {
     if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});
-    if (!body?.tenant_id || !body?.name || !Number.isSafeInteger(body.monthly_limit_uusd) || body.monthly_limit_uusd<0 || !requireReason(body)) return response(400,{error:{code:"invalid_request",message:"tenant_id, name, non-negative monthly_limit_uusd, and reason are required."}});
+    if (typeof body?.tenant_id !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(body.tenant_id) || !body?.name || !Number.isSafeInteger(body.monthly_limit_uusd) || body.monthly_limit_uusd<0 || !requireReason(body)) return response(400,{error:{code:"invalid_request",message:"A tenant ID containing 1-80 letters, digits, underscores, or hyphens, name, non-negative monthly limit, and reason are required."}});
     const tenant=await store.createTenant({tenantId:body.tenant_id,name:body.name,monthlyLimitUusd:body.monthly_limit_uusd,actor:principal.userId,reason:body.reason});
     return response(201,tenant);
+  }
+  const tenantBootstrap=path.match(/^\/v1\/admin\/tenants\/([A-Za-z0-9_-]+)\/members$/);
+  if (verb==="POST" && tenantBootstrap) {
+    if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});
+    if (!body?.user_id || !body?.email || !body?.display_name || !requireReason(body)) return response(400,{error:{code:"invalid_request",message:"user_id, email, display_name, and reason are required to assign the first tenant owner."}});
+    const result=await store.bootstrapTenantOwner({tenantId:tenantBootstrap[1],userId:body.user_id,email:body.email,displayName:body.display_name,actor:principal.userId,reason:body.reason});
+    if (result.kind==="tenant_not_found") return response(404,{error:{code:"tenant_not_found",message:"Tenant not found or inactive."}});
+    if (result.kind==="already_bootstrapped") return response(409,{error:{code:"tenant_already_bootstrapped",message:"Tenant already has an active member; use tenant-scoped member administration."}});
+    return response(201,{tenant_id:tenantBootstrap[1],user_id:body.user_id,role:"owner"});
   }
   if (verb==="GET" && path==="/v1/admin/members") return response(200,{members:await store.listMembers(principal.tenantId)});
   if (verb==="POST" && path==="/v1/admin/members") {

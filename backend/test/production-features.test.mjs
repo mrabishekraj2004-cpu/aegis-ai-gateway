@@ -197,7 +197,8 @@ test("tenant administrators cannot read or mutate platform-wide control-plane re
     ["GET","/v1/admin/tenants",null],
     ["POST","/v1/admin/tenants",{tenant_id:"tenant_b",name:"Other tenant",monthly_limit_uusd:100,reason:"test"}],
     ["GET","/v1/admin/pricing",null],
-    ["POST","/v1/admin/pricing",{provider:"mock",model:"m",region:"global",unit:"token",version:"v1",effective_at:"2026-01-01T00:00:00Z",reason:"test"}]
+    ["POST","/v1/admin/pricing",{provider:"mock",model:"m",region:"global",unit:"token",version:"v1",effective_at:"2026-01-01T00:00:00Z",reason:"test"}],
+    ["POST","/v1/admin/tenants/tenant_b/members",{user_id:"owner_b",email:"owner@example.test",display_name:"Owner",reason:"bootstrap"}]
   ]) {
     const result=await handleAdminRequest({method,path,url:new URL("http://gateway.local"+path),body,principal,store});
     assert.equal(result.status,403,`${method} ${path} must be platform-admin only`);
@@ -212,6 +213,19 @@ test("platform-wide control-plane access requires a server-configured platform i
   const result=await handleAdminRequest({method:"GET",path:"/v1/admin/tenants",url:new URL("http://gateway.local/v1/admin/tenants"),body:null,principal,store});
   assert.equal(result.status,200);
   assert.deepEqual(result.body.tenants,[{tenant_id:"tenant_a"}]);
+});
+
+test("platform admins can bootstrap the first owner once for a new tenant", async () => {
+  const calls=[];
+  const principal={tenantId:"platform_tenant",userId:"platform_user",role:"admin",scopes:["control:read","control:write"],platformAdmin:true};
+  const store={async bootstrapTenantOwner(input){calls.push(input);return {kind:"created"};}};
+  const path="/v1/admin/tenants/new-tenant/members";
+  const result=await handleAdminRequest({method:"POST",path,url:new URL("http://gateway.local"+path),body:{user_id:"first_owner",email:"owner@example.test",display_name:"First Owner",reason:"Tenant setup"},principal,store});
+  assert.equal(result.status,201);
+  assert.deepEqual(result.body,{tenant_id:"new-tenant",user_id:"first_owner",role:"owner"});
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].tenantId,"new-tenant");
+  assert.equal(calls[0].actor,"platform_user");
 });
 
 test("non-stream client cancellation aborts provider work and leaves usage pending reconciliation", async () => {
