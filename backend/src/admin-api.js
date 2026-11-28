@@ -95,7 +95,7 @@ export async function handleAdminRequest({ method, path, url, body, principal, s
     const row=await store.publishRoutingConfig({versionId:Number(publish[1]),tenantId:principal.tenantId,actor:principal.userId,reason:body.reason});
     return row?response(200,row):response(404,{error:{code:"configuration_not_found",message:"Draft configuration not found."}});
   }
-  const rollback=path.match(/^\\/v1\\/admin\\/routing-configs\\/(\\d+)\\/rollback$/);
+  const rollback=path.match(/^\/v1\/admin\/routing-configs\/(\d+)\/rollback$/);
   if (verb==="POST" && rollback) {
     if (!writeAllowed) return response(403,{error:{code:"insufficient_scope",message:"control:write is required."}});
     if (!requireReason(body)) return response(400,{error:{code:"invalid_request",message:"A reason is required to roll back routing configuration."}});
