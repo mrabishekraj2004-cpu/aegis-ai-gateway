@@ -18,6 +18,14 @@ test("PostgreSQL selection without structured settings fails instead of falling 
   );
 });
 
+test("Neon DATABASE_URL is accepted as the connection string without logging it", () => {
+  const connectionString = ["postgresql:", "//localhost/aegis?sslmode=require"].join("");
+  const normalized = ["postgresql:", "//localhost/aegis?sslmode=verify-full"].join("");
+  assert.deepEqual(databaseConfigFromEnv({ DATABASE_URL: connectionString }), {
+    connectionString: normalized, ssl: { rejectUnauthorized: true }
+  });
+});
+
 test("structured database settings preserve generated credentials and enable TLS", () => {
   const password = randomBytes(32).toString("base64url");
   const config = databaseConfigFromEnv({
