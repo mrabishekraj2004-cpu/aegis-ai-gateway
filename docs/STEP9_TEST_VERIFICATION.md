@@ -1,6 +1,6 @@
 # Step 9 — Test Verification
 
-> **Current candidate update (2026-11-28):** The PR #6 candidate at `4b32405fef6626a204b321cdd3db4fa3f4aa118a` passed GitHub CI: backend **47 passed, 0 failed, 0 skipped** with PostgreSQL enabled; frontend **16 passed, 0 failed, 0 skipped**; syntax, type, lint, and Security passed. The PR stack is open and unmerged. This does not verify a live browser-to-API deployment or paid providers; see [FEATURE_COMPLETION_AUDIT.md](FEATURE_COMPLETION_AUDIT.md). The snapshot and counts below describe the earlier Step 8 handoff only.
+> **Current candidate update (2026-11-28):** PR #6 head `9623c1b0d19a26ac80333dd8d4a2c9a76381a5d4` passed GitHub CI: backend **47 passed, 0 failed, 0 skipped** with PostgreSQL enabled; frontend **16 passed, 0 failed, 0 skipped**; syntax, type, lint, and Security passed. The PR stack remains open and unmerged. A frontend-only Vercel staging preview of this head is READY and HTTP-checked; it does not provide the API, workers, or database. Live browser-to-API, provider, and full PostgreSQL deployment checks remain pending. See [FEATURE_COMPLETION_AUDIT.md](FEATURE_COMPLETION_AUDIT.md). The detailed Step 8 commands and the original standalone snapshot below are historical results.
 
 **Date:** 2026-11-27  
 **Outcome:** **Blocked for Step 10 deployment.** Frontend and backend suites pass at the Step 8 baseline. Live browser/API verification and all seven PostgreSQL integration checks remain pending because this workspace cannot reach loopback sockets, `git.chatgpt-team.site`, or the npm registry.  
@@ -8,10 +8,19 @@
 
 ## Current candidate verification (2026-11-28)
 
-- Candidate commit: `4b32405fef6626a204b321cdd3db4fa3f4aa118a`; PR #6 is stacked on PR #5 and is still open.
-- GitHub Actions [CI run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46110664696): backend syntax, TypeScript, ESLint, and PostgreSQL integration suite passed (**47 passed, 0 failed, 0 skipped**); frontend syntax and tests passed (**16 passed, 0 failed, 0 skipped**).
-- GitHub Actions [Security run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46110664807): dependency audits, secret scan, CodeQL, and backend/frontend image scans passed.
+- Candidate commit: `9623c1b0d19a26ac80333dd8d4a2c9a76381a5d4`; PR #6 is stacked on PR #5 and is still open.
+- GitHub Actions [CI run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46110899870): backend syntax, TypeScript, ESLint, and PostgreSQL integration suite passed (**47 passed, 0 failed, 0 skipped**); frontend syntax and tests passed (**16 passed, 0 failed, 0 skipped**).
+- GitHub Actions [Security run](https://github.com/mrabishekraj2004-cpu/aegis-ai-gateway/actions/runs/46110899926): dependency audits, secret scan, CodeQL, and backend/frontend image scans passed.
 - Live HTTP/browser, provider API, deployed worker, and backend-process restart scenarios are not verified. Vercel currently has no project environment variables for this app, so the deployed static frontend remains a preview rather than the full PostgreSQL-backed service.
+
+## Frontend-only Vercel staging preview (2026-11-28)
+
+- Deployment: `dpl_4rqVew7xuJu2koiDAhnaGrBwzCor`, **READY**, from PR #6 head `9623c1b0d19a26ac80333dd8d4a2c9a76381a5d4`.
+- Preview origin: https://aegis-ai-gateway-6992q5iqg-abishek-f58a.vercel.app (Vercel SSO protection remains enabled; a temporary share link was sent directly to the user and is not stored in this repository).
+- HTTP evidence: the root document and `/src/admin.js` each returned **200 OK** through Vercel's protected deployment fetch. The JavaScript response includes the new dead-letter resolution form and its provider-evidence inputs.
+- The deployment is a static frontend preview. `runtime-config.js` contains no API credentials or backend URL; no backend, PostgreSQL service, or worker was deployed. The preview must not be represented as the full SaaS gateway.
+- The Vercel project framework setting was cleared from an incorrect `nextjs` value so the static source could deploy. Production domains and the production alias were not promoted or changed.
+- This HTTP fetch confirms the page and UI assets are served; it is not a real browser rendering or an end-to-end API test. Desktop, narrow-screen, keyboard-only, live API, CORS, and authentication behavior remain pending.
 
 ## Tested source snapshot
 
