@@ -1,11 +1,14 @@
 import { createHttpAdapter } from "./api.js";
 import { createSimulatedAdapter } from "./fixtures.js";
 import { attachAdmin } from "./admin.js";
+import { createManagedAuth } from "./managed-auth.js";
 
 const $ = selector => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);
 const runtimeConfig = window.AEGIS_CONFIG ?? {};
-const mode = params.get("mode") === "api" ? "api" : "simulated";
+const managedAuth = createManagedAuth(runtimeConfig);
+const apiConfigured = Boolean(runtimeConfig.apiBaseUrl && runtimeConfig.neonAuthUrl);
+const mode = params.get("mode") === "simulated" ? "simulated" : params.get("mode") === "api" || apiConfigured ? "api" : "simulated";
 const localDemoMode = mode === "api" && runtimeConfig.localDemoMode === true;
 const demoTenants = [
   { id: "aster", name: "Aster Labs" },
@@ -15,6 +18,7 @@ const demoTenants = [
 let selectedTenant = localDemoMode && demoTenants.some(tenant => tenant.id === "budget") ? "budget" : "aster";
 const getAccessToken = async () => {
   if (localDemoMode) return runtimeConfig.demoTokens?.[selectedTenant] ?? null;
+  if (managedAuth.enabled) return managedAuth.accessToken();
   return typeof runtimeConfig.getAccessToken === "function"
     ? runtimeConfig.getAccessToken()
     : null;
@@ -414,6 +418,10 @@ function setAuthView(view, focus = true) {
   $("#auth-name-field").hidden = view !== "register";
   $("#auth-terms").hidden = view !== "register";
   $("#auth-password-field").hidden = view === "forgot-password";
+  $("#auth-otp-field").hidden = true;
+  $("#auth-new-password-field").hidden = true;
+  $("#auth-otp").required = false;
+  $("#auth-new-password").required = false;
   $("#forgot-link").hidden = view !== "login";
   $("#auth-name").required = view === "register";
   $("#auth-terms-checkbox").required = view === "register";
@@ -472,8 +480,13 @@ function showAuthNotice(message) {
   notice.hidden = false;
 }
 
-function attachSaasInteractions() {
-  applyProfile(readLocalValue(profileStorageKey, defaultProfile));
+function attachSaasInteractions(authUser = null) {
+  applyProfile(authUser ? { name: authUser.name ?? defaultProfile.name, email: authUser.email ?? "" } : readLocalValue(profileStorageKey, defaultProfile));
+  if (authUser) {
+    $("#profile-email").readOnly = true;
+    $("#profile-role").value = authUser.role ?? "Workspace member";
+    $("#profile-save-note").textContent = "Changes are saved to your account.";
+  }
   const prefs = readLocalValue(preferencesStorageKey, { budgetAlerts: true, productUpdates: false });
   $("#pref-budget-alerts").checked = prefs.budgetAlerts !== false;
   $("#pref-product-updates").checked = prefs.productUpdates === true;
@@ -508,6 +521,15 @@ function attachSaasInteractions() {
     section?.scrollIntoView({ behavior: "smooth", block: "start" });
     section?.focus?.({ preventScroll: true });
   }));
+
+  managedAuth.install({
+    getView: () => currentAuthView,
+    setView: view => setAuthView(view),
+    setStatus,
+    showNotice: showAuthNotice,
+    applyProfile,
+    navigatePage
+  });
 
   $("#auth-form").addEventListener("submit", event => {
     event.preventDefault();
@@ -551,9 +573,25 @@ function attachSaasInteractions() {
 
 async function initialize() {
   renderDateGreeting();
-  attachSaasInteractions();
+  let session = null;
+  try { session = await managedAuth.restore(); }
+  catch { /* A failed auth check must not silently switch to fixtures. */ }
+  const authRequired = managedAuth.enabled && mode === "api";
+  const authViews = ["login", "register", "forgot-password"];
+  if (authRequired && !session) {
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}#login`);
+  } else if (session && authViews.includes(window.location.hash.slice(1))) {
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}#overview`);
+  }
+  attachSaasInteractions(session?.user ?? null);
   attachAdmin({adapter,mode});
   renderMode();
+  document.documentElement.classList.remove("auth-pending");
+  if (authRequired && !session) {
+    setAuthView("login", false);
+    setStatus("Sign in to connect to the staging gateway.");
+    return;
+  }
   await populateTenants();
   $("#request-form").addEventListener("submit", handleSubmit);
   $("#reset-button").addEventListener("click", async () => {
@@ -569,7 +607,7 @@ async function initialize() {
       ? "Fixture dashboard ready. No gateway or provider is connected."
       : `Gateway data loaded for ${overview.tenantName}; storage mode is ${overview.storageMode ?? "unknown"}.`);
   } catch (error) {
-    setPageAlert(`${error.message} To use synthetic data, open this page without the mode=api query parameter.`);
+    setPageAlert(`${error.message} To use synthetic data, open this page with ?mode=simulated.`);
     renderStorageMode("unknown");
     $("#tenant-control").hidden = true;
     $("#outcome-tag").textContent = "API unavailable";

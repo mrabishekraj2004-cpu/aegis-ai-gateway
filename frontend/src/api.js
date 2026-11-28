@@ -45,7 +45,6 @@ export function createHttpAdapter({ baseUrl = "", getAccessToken, fetchImpl = fe
 
   return {
     mode: "api",
-    async listTenants() { return []; },
     async getOverview() {
       assertBase();
       const [healthResponse, response] = await Promise.all([

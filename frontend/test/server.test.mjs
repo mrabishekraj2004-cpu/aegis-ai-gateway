@@ -21,7 +21,7 @@ test("static request handler serves the standalone frontend and module assets", 
     return response;
   };
   const [page, styles, app, missing, post] = await Promise.all([
-    request("/"), request("/styles.css"), request("/src/main.js"), request("/missing.js"), request("/", "POST")
+    request("/"), request("/styles.css"), request("/app.js"), request("/missing.js"), request("/", "POST")
   ]);
   assert.equal(page.statusCode, 200);
   assert.match(page.headers["Content-Type"], /text\/html/);

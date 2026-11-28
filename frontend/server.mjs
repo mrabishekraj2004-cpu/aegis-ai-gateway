@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(fileURLToPath(new URL(".", import.meta.url)));
+const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "dist");
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -17,6 +17,7 @@ function runtimeConfig(env) {
   const localDemoMode = env.AEGIS_LOCAL_DEMO === "true";
   return {
     apiBaseUrl: env.AEGIS_API_BASE_URL || "http://127.0.0.1:4174",
+    neonAuthUrl: env.AEGIS_NEON_AUTH_URL || "",
     localDemoMode,
     demoTokens: localDemoMode ? {
       aster: env.AEGIS_DEMO_ASTER_TOKEN || "",
@@ -47,7 +48,7 @@ export function createServer({ env = process.env } = {}) {
         "Content-Type": "text/javascript; charset=utf-8",
         "Cache-Control": "no-store",
       }));
-      response.end(`window.AEGIS_CONFIG = Object.assign(window.AEGIS_CONFIG || {}, ${JSON.stringify(runtimeConfig(env))});`);
+      response.end(`window.AEGIS_CONFIG = Object.assign(window.AEGIS_CONFIG || {}, ${JSON.stringify(runtimeConfig(env))}); if (window.AEGIS_CONFIG.neonAuthUrl) document.documentElement.classList.add("auth-pending");`);
       return;
     }
     const target = resolve(root, `.${pathname}`);
@@ -73,6 +74,7 @@ export function createServer({ env = process.env } = {}) {
 function securityHeaders(env, headers = {}) {
   let connectSource = "'self'";
   try { connectSource += ` ${new URL(env.AEGIS_API_BASE_URL || "http://127.0.0.1:4174").origin}`; } catch {}
+  try { if (env.AEGIS_NEON_AUTH_URL) connectSource += ` ${new URL(env.AEGIS_NEON_AUTH_URL).origin}`; } catch {}
   return {
     ...headers,
     "X-Content-Type-Options": "nosniff",
