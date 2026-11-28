@@ -78,7 +78,7 @@ testPg("a new tenant receives one auditable first owner atomically", async () =>
     assert.equal(members[0].user_id,"owner_bootstrap");
     assert.equal(members[0].role,"owner");
     const audit=await store.listAuditEvents("tenant_bootstrap");
-    assert.ok(audit.events.some(event=>event.action==="membership.owner_bootstrapped"&&event.actor_id==="platform_admin"));
+    assert.ok(audit.some(event=>event.action==="membership.owner_bootstrapped"&&event.actor_id==="platform_admin"));
   });
 });
 
