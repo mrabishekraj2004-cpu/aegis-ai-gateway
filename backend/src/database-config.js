@@ -12,7 +12,16 @@ export function databaseConfigFromEnv(env = process.env) {
     if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname || !parsed.pathname.slice(1)) {
       throw new Error("DATABASE_URL must be a valid PostgreSQL connection string.");
     }
-    return { connectionString: env.DATABASE_URL, ssl: { rejectUnauthorized: true } };
+    const sslMode = parsed.searchParams.get("sslmode")?.toLowerCase();
+    let connectionString = env.DATABASE_URL;
+    if (["prefer", "require", "verify-ca"].includes(sslMode)) {
+      const match = /([?&]sslmode=)([^&#]*)/i.exec(connectionString);
+      if (match) {
+        connectionString = connectionString.slice(0, match.index) + match[1] + "verify-full" +
+          connectionString.slice(match.index + match[0].length);
+      }
+    }
+    return { connectionString, ssl: { rejectUnauthorized: true } };
   }
   if (!host || !port || !database || !user || !password) return null;
   if (!/^[a-zA-Z0-9.-]+$/.test(host)) throw new Error("AEGIS_DATABASE_HOST must be a DNS name or IPv4 address.");
