@@ -314,6 +314,19 @@ testPg("routing rollback creates a new published version and an audit event", as
   });
 });
 
+testPg("workspace request quotas are shared across all tenant members", async () => {
+  await isolatedDatabase(async ({ poolA }) => {
+    const store=new PostgresLedger({pool:poolA});
+    await store.seedTenant({id:"tenant_workspace_quota",name:"Workspace Quota",limit_uusd:1_000_000});
+    await store.createQuotaPolicy({tenantId:"tenant_workspace_quota",period:"day",requestLimit:1,actor:"workspace_owner",reason:"workspace quota integration test"});
+    const first=await store.reserve({tenantId:"tenant_workspace_quota",userId:"member_one",requestId:"req_workspace_member_one",quoteUusd:10,quoteTokens:2});
+    const second=await store.reserve({tenantId:"tenant_workspace_quota",userId:"member_two",requestId:"req_workspace_member_two",quoteUusd:10,quoteTokens:2});
+    assert.equal(first.admitted,true);
+    assert.equal(second.admitted,false);
+    assert.equal(second.reason,"quota_exceeded");
+  });
+});
+
 testPg("user request, token, cost, and concurrency quotas are reserved atomically", async () => {
   await isolatedDatabase(async ({ poolA }) => {
     const store=new PostgresLedger({pool:poolA});
